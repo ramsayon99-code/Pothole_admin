@@ -76,9 +76,9 @@
 <div id="toast" class="toast hidden"></div>
 
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getDatabase, ref, onValue, update, push, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js';
+import { getDatabase, ref, onValue, update, push, onDisconnect } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js';
 
 const firebaseConfig = {
   apiKey: "AIzaSyBRnoO9_blBIA7a1-hr-mXUBoqY5wEoARU",
@@ -89,7 +89,6 @@ const firebaseConfig = {
   messagingSenderId: "990596444572",
   appId: "1:990596444572:web:1ceaae58c602f5c2175859"
 };
-
 
 let app, db, auth, uid = null;
 let reports = {}, potholes = {}, observations = {}, histories = {}, settings = {};
