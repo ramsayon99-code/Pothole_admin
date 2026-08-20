@@ -77,11 +77,11 @@
 
 <script type="module">
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getDatabase, ref, onValue, update, push } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
+import { getDatabase, ref, onValue, update, push, onDisconnect } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBRnoO9_blBIA7a1-hr-mXUBoqY5wEoARU",
+  apiKey: "AIzaSyBRnoO9_blBIA7a1-hrmXUBoqY5wEoARU",
   authDomain: "ai-model-yolo.firebaseapp.com",
   databaseURL: "https://ai-model-yolo-default-rtdb.firebaseio.com",
   projectId: "ai-model-yolo",
@@ -92,333 +92,260 @@ const firebaseConfig = {
 
 let app, db, auth, uid = null;
 let reports = {}, potholes = {}, observations = {}, histories = {}, settings = {};
-let activeView = 'dashboard', charts = {}, isSignupMode = false;
+let activeView = 'dashboard', charts = {}, isSignupMode = false, unsubscribeFns = [];
+let currentSort = 'newest';
 
 const $ = id => document.getElementById(id);
 const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
+const safe = (v, fallback='N/A') => (v === undefined || v === null || v === '' || (typeof v === 'number' && !Number.isFinite(v))) ? fallback : String(v);
+const num = v => { const n = Number(v); return Number.isFinite(n) ? n : null; };
+const moneySafe = v => { const n=num(v); return n===null?'N/A':n.toFixed(6); };
 const fmtTs = v => {
-  if (!v) return 'Not available';
+  if (v === undefined || v === null || v === '') return 'N/A';
   let d = new Date(v);
   if (typeof v === 'number' && v < 100000000000) d = new Date(v * 1000);
-  return isNaN(d.getTime()) ? 'Not available' : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? 'N/A' : d.toLocaleString();
 };
-
-const moneySafe = v => Number.isFinite(Number(v)) ? Number(v).toFixed(5) : '—';
+const timestampValue = r => {
+  for (const v of [r.updatedAt, r.createdAt, r.lastDetectedAt, r.timestamp, r.location?.timestamp, r.evidence?.capturedAt]) {
+    if (v !== undefined && v !== null && v !== '') {
+      const n=Number(v);
+      if (Number.isFinite(n)) return n < 100000000000 ? n*1000 : n;
+      const d=Date.parse(v); if (!Number.isNaN(d)) return d;
+    }
+  }
+  return 0;
+};
+const detectionConfidence = r => num(r.detection?.confidence ?? r.detectionConfidence);
+const locationOf = r => r.location || {};
+const addressOf = r => locationOf(r).address || {};
+const latOf = r => num(locationOf(r).latitude ?? r.latitude);
+const lonOf = r => num(locationOf(r).longitude ?? r.longitude);
+const imageOf = r => r.evidence?.imageUrl || r.imageUrl || '';
+const cityOf = r => addressOf(r).city || r.city;
+const districtOf = r => addressOf(r).district || r.district;
+const stateOf = r => addressOf(r).state || r.state;
+const pinOf = r => addressOf(r).postalCode || r.postalCode || r.pinCode || r.pin;
+const fullAddressOf = r => addressOf(r).formatted || r.address || '';
+const accuracyOf = r => num(locationOf(r).accuracy ?? r.locationAccuracy);
+const statusClass = s => String(s || 'New').toLowerCase().replace(/\s+/g,'-').replace(/\//g,'-');
+const priorityClass = p => String(p || 'Low').toLowerCase();
 
 function toast(msg) {
-  $('toast').textContent = msg;
-  $('toast').classList.remove('hidden');
+  $('toast').textContent=msg; $('toast').classList.remove('hidden');
   clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => $('toast').classList.add('hidden'), 2600);
+  window.__toastTimer=setTimeout(()=>$('toast').classList.add('hidden'),2800);
 }
+function setSync(s){ $('syncState').textContent=s; }
+function showAuthMsg(m){ $('authMsg').textContent=m; }
+function allReports(){ return Object.entries(reports||{}).map(([key,v])=>({...v,id:v?.id||key,_key:key})).filter(Boolean); }
+function uniquePotholes(){ return Object.values(potholes||{}); }
 
-function setSync(s) { $('syncState').textContent = s; }
-function showAuthMsg(m) { $('authMsg').textContent = m; }
-function statusClass(s) { return String(s || '').toLowerCase().replace(/\s+/g, '-').replace('/', '-'); }
-function priorityClass(p) { return String(p || 'low').toLowerCase(); }
-
-function allReports() { return Object.values(reports || {}); }
-function uniquePotholes() { return Object.values(potholes || {}); }
-
-function counts() {
-  const a = allReports(), c = { total: a.length, New: 0, Waiting: 0, Pending: 0, 'In Progress': 0, 'Successful / Completed': 0, Critical: 0, High: 0, Medium: 0, Low: 0 };
-  a.forEach(r => {
-    if (c[r.status] !== undefined) c[r.status]++;
-    if (c[r.priority] !== undefined) c[r.priority]++;
-  });
+function counts(){
+  const a=allReports(), c={total:a.length,New:0,Waiting:0,Pending:0,'In Progress':0,'Successful / Completed':0,Critical:0,High:0,Medium:0,Low:0};
+  a.forEach(r=>{if(c[r.status]!==undefined)c[r.status]++;if(c[r.priority]!==undefined)c[r.priority]++;});
   return c;
 }
-
-function reportRows(arr = allReports()) {
-  if (!arr.length) return '<div class="empty">No data available</div>';
-  return `<div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Report ID</th><th>Coordinates</th><th>Confidence</th><th>Occurrences</th><th>Priority</th><th>Status</th><th>Last Detected</th></tr></thead><tbody>${arr.map(r => `<tr data-report="${esc(r.reportId || r.id)}" class="report-row"><td>${r.imageUrl ? `<img class="thumb" src="${esc(r.imageUrl)}" alt="Pothole">` : '—'}</td><td><b>${esc(r.reportId || r.id || 'N/A')}</b><br><small>${esc(r.potholeId || '')}</small></td><td>${r.latitude != null ? `${moneySafe(r.latitude)}, ${moneySafe(r.longitude)}` : 'Not available'}</td><td>${r.detectionConfidence != null ? Math.round(r.detectionConfidence * 100) + '%' : 'Not available'}</td><td>${Number(r.occurrenceCount) || 1}</td><td><span class="badge ${priorityClass(r.priority)}">${esc(r.priority || 'Low')}</span></td><td><span class="badge status-${statusClass(r.status)}">${esc(r.status || 'New')}</span></td><td>${esc(fmtTs(r.lastDetectedAt || r.timestamp))}</td></tr>`).join('')}</tbody></table></div>`;
-}
-
-function filtersHtml() {
-  return `<div class="filters"><input id="search" class="input" placeholder="Search ID, coordinates..."><select id="fStatus" class="select"><option value="All">All Statuses</option><option value="New">New</option><option value="Waiting">Waiting</option><option value="Pending">Pending</option><option value="In Progress">In Progress</option><option value="Successful / Completed">Successful / Completed</option></select><select id="fPriority" class="select"><option value="All">All Priorities</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select><input id="fDate" class="input" type="date"><select id="fMonth" class="select"><option value="">All Months</option>${Array.from({length: 12}, (_, i) => `<option value="${i + 1}">${new Date(2000, i, 1).toLocaleString(undefined, {month: 'long'})}</option>`).join('')}</select><input id="fYear" class="input" type="number" placeholder="Year"></div>`;
-}
-
-function filtered() {
-  let a = allReports();
-  const q = $('search')?.value?.toLowerCase().trim();
-  const st = $('fStatus')?.value, p = $('fPriority')?.value, d = $('fDate')?.value, m = $('fMonth')?.value, y = $('fYear')?.value;
-  if (q) a = a.filter(r => [r.reportId, r.potholeId, r.address, r.area, r.latitude, r.longitude, r.status, r.priority].some(x => String(x ?? '').toLowerCase().includes(q)));
-  if (st && st !== 'All') a = a.filter(r => r.status === st);
-  if (p && p !== 'All') a = a.filter(r => r.priority === p);
-  if (d) a = a.filter(r => r.date === d);
-  if (m) a = a.filter(r => Number(r.month) === Number(m));
-  if (y) a = a.filter(r => Number(r.year) === Number(y));
-  return a.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0) || (b.lastDetectedAt || 0) - (a.lastDetectedAt || 0));
-}
-
-function bindFilters() {
-  ['search', 'fStatus', 'fPriority', 'fDate', 'fMonth', 'fYear'].forEach(id => $(id)?.addEventListener('input', () => renderReportTable()));
-  document.querySelectorAll('.report-row').forEach(el => el.addEventListener('click', () => openReport(el.dataset.report)));
-}
-
-function renderReportTable() {
-  const box = $('reportTable');
-  if (box) { box.innerHTML = reportRows(filtered()); bindFilters(); }
-}
-
-function dashboard() {
-  const c = counts(), a = allReports().sort((x, y) => (y.lastDetectedAt || 0) - (x.lastDetectedAt || 0));
-  return `<div class="grid">${[['total','Total Reports'],['potholes','Total Unique Potholes'],['New','New'],['Waiting','Waiting'],['Pending','Pending'],['In Progress','In Progress'],['Successful / Completed','Successful'],['Critical','Critical'],['High','High'],['Medium','Medium'],['Low','Low']].map(([k, l]) => `<div class="card metric"><b>${k === 'potholes' ? uniquePotholes().length : (c[k] ?? 0)}</b><span>${l}</span></div>`).join('')}</div><div class="cards2 section"><div class="card"><h2>Recent Reports</h2>${reportRows(a.slice(0, 8))}</div><div class="card"><h2>Highest Priority</h2>${reportRows([...a].sort((x, y) => (y.priorityScore || 0) - (x.priorityScore || 0)).slice(0, 6))}</div></div>`;
-}
-
-function reportsView(title = 'All Reports', arr = null) {
-  return `<div class="card">${filtersHtml()}<div id="reportTable">${reportRows(arr || filtered())}</div></div>`;
-}
-
-function potholesView() {
-  const a = uniquePotholes().sort((x, y) => (y.occurrenceCount || 0) - (x.occurrenceCount || 0));
-  return `<div class="card"><h2>Unique Potholes</h2>${a.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Pothole ID</th><th>Associated Report</th><th>Occurrences</th><th>Vehicles</th><th>Best Confidence</th><th>Priority</th><th>Status</th><th>Last Detected</th></tr></thead><tbody>${a.map(p => `<tr class="report-row" data-report="${esc(p.reportId || p.id)}"><td><b>${esc(p.potholeId || p.id)}</b></td><td>${esc(p.reportId || '—')}</td><td>${Number(p.occurrenceCount) || 1}</td><td>${Number(p.vehicleCount) || 1}</td><td>${p.bestConfidence != null ? Math.round(p.bestConfidence * 100) + '%' : 'Not available'}</td><td><span class="badge ${priorityClass(p.priority)}">${esc(p.priority || 'Low')}</span></td><td>${esc(p.status || 'New')}</td><td>${esc(fmtTs(p.lastDetectedAt))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No unique potholes recorded yet</div>'}</div>`;
-}
-
-function analytics() {
-  return `<div class="charts"><div class="card"><h2>Reports by Day</h2><div class="chartbox"><canvas id="dayChart"></canvas></div></div><div class="card"><h2>Reports by Month</h2><div class="chartbox"><canvas id="monthChart"></canvas></div></div><div class="card"><h2>Status Distribution</h2><div class="chartbox"><canvas id="statusChart"></canvas></div></div><div class="card"><h2>Priority Distribution</h2><div class="chartbox"><canvas id="priorityChart"></canvas></div></div><div class="card"><h2>Confidence Distribution</h2><div class="chartbox"><canvas id="confChart"></canvas></div></div><div class="card"><h2>Reports by Year</h2><div class="chartbox"><canvas id="yearChart"></canvas></div></div></div>`;
-}
-
-function destroyCharts() {
-  Object.keys(charts).forEach(k => { if (charts[k]) { charts[k].destroy(); delete charts[k]; } });
-}
-
-function makeChart(id, type, obj) {
-  const el = $(id); if (!el) return;
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart(el, {
-    type,
-    data: {
-      labels: Object.keys(obj).length ? Object.keys(obj) : ['No Data'],
-      datasets: [{ label: 'Detection Count', data: Object.values(obj).length ? Object.values(obj) : [0], backgroundColor: ['#1677ff','#28c76f','#ffcf5a','#ff5d73','#91a7bb'] }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type === 'doughnut' } } }
+function priorityScore(p){return ({Critical:4,High:3,Medium:2,Low:1}[p]||0);}
+function sortReports(a){
+  return [...a].sort((x,y)=>{
+    if(currentSort==='oldest') return timestampValue(x)-timestampValue(y);
+    if(currentSort==='confidence') return (detectionConfidence(y)||0)-(detectionConfidence(x)||0);
+    if(currentSort==='priority') return priorityScore(y.priority)-priorityScore(x.priority)||timestampValue(y)-timestampValue(x);
+    if(currentSort==='updated') return (Number(y.updatedAt)||timestampValue(y))-(Number(x.updatedAt)||timestampValue(x));
+    return timestampValue(y)-timestampValue(x);
   });
 }
 
-function renderCharts() {
-  const a = allReports(), days = {}, months = {}, years = {}, status = {}, priority = {}, conf = {};
-  a.forEach(r => {
-    const day = r.date || 'Unknown', month = (r.year && r.month) ? `${r.year}-${String(r.month).padStart(2, '0')}` : 'Unknown', year = r.year || 'Unknown';
-    days[day] = (days[day] || 0) + 1;
-    months[month] = (months[month] || 0) + 1;
-    years[year] = (years[year] || 0) + 1;
-    status[r.status || 'New'] = (status[r.status || 'New'] || 0) + 1;
-    priority[r.priority || 'Low'] = (priority[r.priority || 'Low'] || 0) + 1;
-    if (r.detectionConfidence != null) {
-      const b = (Math.floor(r.detectionConfidence * 10) / 10).toFixed(1);
-      conf[b] = (conf[b] || 0) + 1;
-    }
-  });
-  makeChart('dayChart', 'line', days);
-  makeChart('monthChart', 'bar', months);
-  makeChart('statusChart', 'doughnut', status);
-  makeChart('priorityChart', 'doughnut', priority);
-  makeChart('confChart', 'bar', conf);
-  makeChart('yearChart', 'bar', years);
+function reportRows(arr=allReports()){
+  if(!arr.length)return '<div class="empty">No reports available.</div>';
+  return `<div class="table-wrap"><table class="table"><thead><tr>
+    <th>Image</th><th>Report</th><th>Location</th><th>Confidence</th><th>Priority</th><th>Status</th><th>Time</th>
+  </tr></thead><tbody>${arr.map(r=>{
+    const conf=detectionConfidence(r), lat=latOf(r), lon=lonOf(r);
+    return `<tr data-report="${esc(r.reportId||r.id||r._key)}" class="report-row">
+      <td>${imageOf(r)?`<img class="thumb" src="${esc(imageOf(r))}" alt="Pothole evidence" loading="lazy" onerror="this.style.display='none'">`:'N/A'}</td>
+      <td><b>${esc(safe(r.reportId||r.id))}</b><br><small>${esc(safe(r.potholeId))}</small></td>
+      <td>${esc(safe(cityOf(r)||districtOf(r)||stateOf(r)||fullAddressOf(r)))}<br><small>${lat!==null&&lon!==null?`${lat.toFixed(5)}, ${lon.toFixed(5)}`:'N/A'}</small></td>
+      <td>${conf===null?'N/A':Math.round(conf*100)+'%'}</td>
+      <td><span class="badge ${priorityClass(r.priority)}">${esc(safe(r.priority,'Low'))}</span></td>
+      <td><span class="badge status-${statusClass(r.status)}">${esc(safe(r.status,'New'))}</span></td>
+      <td>${esc(fmtTs(r.updatedAt||r.createdAt||r.lastDetectedAt||r.timestamp))}</td>
+    </tr>`;
+  }).join('')}</tbody></table></div>`;
 }
 
-function mapView() {
-  const a = allReports().filter(r => Number.isFinite(Number(r.latitude)) && Number.isFinite(Number(r.longitude)));
-  return `<div class="card"><h2>Map / Geolocation Markers</h2><p style="color:var(--muted);font-size:13px;margin-bottom:12px">Real coordinates captured by mobile/camera sensors.</p>${a.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Report ID</th><th>Latitude, Longitude</th><th>Priority</th><th>Status</th><th>Occurrences</th><th>Navigation</th></tr></thead><tbody>${a.map(r => `<tr><td><b>${esc(r.reportId || r.id)}</b></td><td>${Number(r.latitude).toFixed(6)}, ${Number(r.longitude).toFixed(6)}</td><td><span class="badge ${priorityClass(r.priority)}">${esc(r.priority || 'Low')}</span></td><td>${esc(r.status || 'New')}</td><td>${Number(r.occurrenceCount) || 1}</td><td><button class="btn primary" onclick="window.open('https://www.google.com/maps?q=${encodeURIComponent(r.latitude + ',' + r.longitude)}','_blank')">Open Maps</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No location coordinates recorded yet</div>'}</div>`;
+function filtersHtml(){
+ return `<div class="filters">
+ <input id="search" class="input" placeholder="Search report, address, city, PIN..." autocomplete="off">
+ <select id="fStatus" class="select"><option value="All">All Statuses</option><option>New</option><option>Waiting</option><option>Pending</option><option>In Progress</option><option>Successful / Completed</option></select>
+ <select id="fPriority" class="select"><option value="All">All Priorities</option><option>Critical</option><option>High</option><option>Medium</option><option>Low</option></select>
+ <select id="fCity" class="select"><option value="All">All Cities</option></select>
+ <select id="fDistrict" class="select"><option value="All">All Districts</option></select>
+ <select id="fState" class="select"><option value="All">All States</option></select>
+ <input id="fDate" class="input" type="date">
+ <select id="fMonth" class="select"><option value="">All Months</option>${Array.from({length:12},(_,i)=>`<option value="${i+1}">${new Date(2000,i,1).toLocaleString(undefined,{month:'long'})}</option>`).join('')}</select>
+ <input id="fYear" class="input" type="number" placeholder="Year">
+ <select id="sort" class="select"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="confidence">Highest confidence</option><option value="priority">Highest priority</option><option value="updated">Recently updated</option></select>
+ </div>`;
+}
+function optionsFor(field){
+ const vals=[...new Set(allReports().map(r=>field==='city'?cityOf(r):field==='district'?districtOf(r):stateOf(r)).filter(Boolean))].sort();
+ return `<option value="All">All ${field[0].toUpperCase()+field.slice(1)}s</option>`+vals.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+}
+function filtered(){
+ let a=allReports(), q=$('search')?.value?.toLowerCase().trim(), st=$('fStatus')?.value, p=$('fPriority')?.value, d=$('fDate')?.value, m=$('fMonth')?.value, y=$('fYear')?.value;
+ if(q)a=a.filter(r=>[r.reportId,r.potholeId,fullAddressOf(r),addressOf(r).road,addressOf(r).area,addressOf(r).locality,cityOf(r),districtOf(r),stateOf(r),pinOf(r),latOf(r),lonOf(r),r.status,r.priority].some(x=>String(x??'').toLowerCase().includes(q)));
+ if(st&&st!=='All')a=a.filter(r=>r.status===st);
+ if(p&&p!=='All')a=a.filter(r=>r.priority===p);
+ if($('fCity')?.value&&$('fCity').value!=='All')a=a.filter(r=>cityOf(r)===$('fCity').value);
+ if($('fDistrict')?.value&&$('fDistrict').value!=='All')a=a.filter(r=>districtOf(r)===$('fDistrict').value);
+ if($('fState')?.value&&$('fState').value!=='All')a=a.filter(r=>stateOf(r)===$('fState').value);
+ if(d)a=a.filter(r=>{const t=timestampValue(r);return t&&new Date(t).toISOString().slice(0,10)===d;});
+ if(m)a=a.filter(r=>{const t=timestampValue(r);return t&&new Date(t).getMonth()+1===Number(m);});
+ if(y)a=a.filter(r=>{const t=timestampValue(r);return t&&new Date(t).getFullYear()===Number(y);});
+ return sortReports(a);
+}
+function populateFilterOptions(){
+ for(const [id,field] of [['fCity','city'],['fDistrict','district'],['fState','state']]){
+   const el=$(id); if(!el)return; const old=el.value; el.innerHTML=optionsFor(field); if([...el.options].some(o=>o.value===old))el.value=old;
+ }
+}
+function bindFilters(){
+ ['search','fStatus','fPriority','fCity','fDistrict','fState','fDate','fMonth','fYear','sort'].forEach(id=>$(id)?.addEventListener('input',()=>{if(id==='sort')currentSort=$('sort').value;renderReportTable();}));
+ document.querySelectorAll('.report-row').forEach(el=>el.addEventListener('click',()=>openReport(el.dataset.report)));
+}
+function renderReportTable(){const box=$('reportTable');if(box){populateFilterOptions();box.innerHTML=reportRows(filtered());bindFilters();}}
+
+function dashboard(){
+ const c=counts(),a=sortReports(allReports()), today=new Date().toISOString().slice(0,10);
+ const avg=a.length?a.reduce((s,r)=>s+(detectionConfidence(r)||0),0)/a.length:0;
+ const gps=a.filter(r=>latOf(r)!==null&&lonOf(r)!==null).length;
+ return `<div class="grid">
+ ${[['total','Total Reports'],['New','New'],['Waiting','Waiting'],['Pending','Pending'],['In Progress','In Progress'],['Successful / Completed','Successful'],['High','High Priority'],['gps','With GPS']].map(([k,l])=>`<div class="card metric"><b>${k==='gps'?gps:(c[k]??0)}</b><span>${l}</span></div>`).join('')}
+ </div>
+ <div class="grid section">
+ <div class="card metric"><b>${a.filter(r=>{const t=timestampValue(r);return t&&new Date(t).toISOString().slice(0,10)===today;}).length}</b><span>Today's Reports</span></div>
+ <div class="card metric"><b>${Math.round(avg*100)}%</b><span>Average AI Confidence</span></div>
+ <div class="card metric"><b>${a.length-gps}</b><span>Without GPS</span></div>
+ <div class="card metric"><b>${uniquePotholes().length}</b><span>Unique Potholes</span></div>
+ </div>
+ <div class="cards2 section"><div class="card"><h2>Recent Reports</h2>${reportRows(a.slice(0,8))}</div><div class="card"><h2>Highest Priority</h2>${reportRows(sortReports(a).filter(r=>['Critical','High'].includes(r.priority)).slice(0,6))}</div></div>`;
+}
+function reportsView(title='All Reports',arr=null){return `<div class="card">${filtersHtml()}<div id="reportTable">${reportRows(arr||filtered())}</div></div>`;}
+
+function potholesView(){
+ const a=uniquePotholes().sort((x,y)=>(y.occurrenceCount||0)-(x.occurrenceCount||0));
+ return `<div class="card"><h2>Unique Potholes</h2>${a.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Pothole ID</th><th>Report</th><th>Occurrences</th><th>Best Confidence</th><th>Priority</th><th>Status</th><th>Last Detected</th></tr></thead><tbody>${a.map(p=>`<tr class="report-row" data-report="${esc(p.reportId||p.id)}"><td><b>${esc(safe(p.potholeId||p.id))}</b></td><td>${esc(safe(p.reportId))}</td><td>${Number(p.occurrenceCount)||1}</td><td>${num(p.bestConfidence)===null?'N/A':Math.round(num(p.bestConfidence)*100)+'%'}</td><td><span class="badge ${priorityClass(p.priority)}">${esc(safe(p.priority,'Low'))}</span></td><td>${esc(safe(p.status,'New'))}</td><td>${esc(fmtTs(p.lastDetectedAt))}</td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No unique potholes recorded yet.</div>'}</div>`;
+}
+function analytics(){return `<div class="charts"><div class="card"><h2>Reports by Day</h2><div class="chartbox"><canvas id="dayChart"></canvas></div></div><div class="card"><h2>Reports by Month</h2><div class="chartbox"><canvas id="monthChart"></canvas></div></div><div class="card"><h2>Status Distribution</h2><div class="chartbox"><canvas id="statusChart"></canvas></div></div><div class="card"><h2>Priority Distribution</h2><div class="chartbox"><canvas id="priorityChart"></canvas></div></div><div class="card"><h2>Confidence Distribution</h2><div class="chartbox"><canvas id="confChart"></canvas></div></div><div class="card"><h2>Reports by Year</h2><div class="chartbox"><canvas id="yearChart"></canvas></div></div></div>`;}
+function destroyCharts(){Object.keys(charts).forEach(k=>{charts[k]?.destroy();delete charts[k];});}
+function makeChart(id,type,obj){const el=$(id);if(!el)return;charts[id]?.destroy();charts[id]=new Chart(el,{type,data:{labels:Object.keys(obj).length?Object.keys(obj):['No Data'],datasets:[{label:'Reports',data:Object.values(obj).length?Object.values(obj):[0]}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:type==='doughnut'}}}});}
+function renderCharts(){
+ const a=allReports(),days={},months={},years={},status={},priority={},conf={};
+ a.forEach(r=>{const t=timestampValue(r);const d=t?new Date(t):null;const day=d&&!Number.isNaN(d.getTime())?d.toISOString().slice(0,10):'Unknown';const month=d&&!Number.isNaN(d.getTime())?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`:'Unknown';const year=d&&!Number.isNaN(d.getTime())?d.getFullYear():'Unknown';days[day]=(days[day]||0)+1;months[month]=(months[month]||0)+1;years[year]=(years[year]||0)+1;status[r.status||'New']=(status[r.status||'New']||0)+1;priority[r.priority||'Low']=(priority[r.priority||'Low']||0)+1;const c=detectionConfidence(r);if(c!==null){const b=(Math.floor(c*10)/10).toFixed(1);conf[b]=(conf[b]||0)+1;}});
+ makeChart('dayChart','line',days);makeChart('monthChart','bar',months);makeChart('statusChart','doughnut',status);makeChart('priorityChart','doughnut',priority);makeChart('confChart','bar',conf);makeChart('yearChart','bar',years);
+}
+function mapView(){
+ const a=allReports().filter(r=>latOf(r)!==null&&lonOf(r)!==null);
+ return `<div class="card"><h2>Map / Geolocation Markers</h2><p style="color:var(--muted);font-size:13px">Actual GPS coordinates captured by the detector.</p>${a.length?`<div class="table-wrap"><table class="table"><thead><tr><th>Report</th><th>Location</th><th>Address</th><th>Priority</th><th>Navigation</th></tr></thead><tbody>${a.map(r=>`<tr><td><b>${esc(safe(r.reportId||r.id))}</b></td><td>${latOf(r).toFixed(6)}, ${lonOf(r).toFixed(6)}</td><td>${esc(safe(fullAddressOf(r)||cityOf(r)||districtOf(r)))}</td><td><span class="badge ${priorityClass(r.priority)}">${esc(safe(r.priority,'Low'))}</span></td><td><button class="btn primary" data-map="${esc(latOf(r)+','+lonOf(r))}">Open Maps</button></td></tr>`).join('')}</tbody></table></div>`:'<div class="empty">No location coordinates recorded yet.</div>'}</div>`;
+}
+function dateView(kind){
+ let a=allReports(),now=new Date();if(kind==='date')a=a.filter(r=>{const t=timestampValue(r);return t&&new Date(t).toISOString().slice(0,10)===now.toISOString().slice(0,10);});if(kind==='month')a=a.filter(r=>{const t=timestampValue(r),d=t?new Date(t):null;return d&&d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear();});if(kind==='year')a=a.filter(r=>{const t=timestampValue(r),d=t?new Date(t):null;return d&&d.getFullYear()===now.getFullYear();});
+ const avg=a.length?a.reduce((s,r)=>s+(detectionConfidence(r)||0),0)/a.length:0;
+ return `<div class="grid"><div class="card metric"><b>${a.length}</b><span>Reports in selected period</span></div><div class="card metric"><b>${new Set(a.map(r=>r.potholeId).filter(Boolean)).size}</b><span>Unique Potholes</span></div><div class="card metric"><b>${Math.round(avg*100)}%</b><span>Average Confidence</span></div><div class="card metric"><b>${a.filter(r=>r.status==='Successful / Completed').length}</b><span>Completed</span></div></div><div class="section card"><h2>${kind==='date'?'Today':kind==='month'?'This Month':'This Year'}</h2>${reportRows(sortReports(a))}</div>`;
+}
+function settingsView(){const s=settings||{};return `<div class="card"><h2>System Threshold Settings</h2><div class="detail-grid"><div><div class="field"><label>Duplicate Detection Distance (Meters)</label><input id="setDistance" class="input" type="number" min="1" value="${esc(s.duplicateDistanceMeters??35)}"></div><div class="field"><label>AI Confidence Threshold (0.0 to 1.0)</label><input id="setConfidence" class="input" type="number" min="0" max="1" step="0.01" value="${esc(s.confidenceThreshold??.45)}"></div></div><div><div class="field"><label>Default New Report Status</label><select id="setStatus" class="select"><option ${s.defaultStatus==='New'?'selected':''}>New</option><option ${s.defaultStatus==='Waiting'?'selected':''}>Waiting</option><option ${s.defaultStatus==='Pending'?'selected':''}>Pending</option></select></div></div></div><button id="saveSettings" class="btn primary">Save Settings</button></div>`;}
+function profileView(){return `<div class="card"><h2>Admin Profile Information</h2><p><b>Email:</b> ${esc(auth.currentUser?.email||'N/A')}</p><p><b>Firebase UID:</b> <small>${esc(auth.currentUser?.uid||'N/A')}</small></p><button class="btn danger" id="profileLogout">Logout Account</button></div>`;}
+function viewTitle(v){return({dashboard:'Dashboard',reports:'All Reports',potholes:'Potholes',new:'New Reports',waiting:'Waiting',pending:'Pending',progress:'In Progress',successful:'Successful / Completed',high:'High Priority',analytics:'Analytics',map:'Map / Locations',date:'Reports by Date',month:'Reports by Month',year:'Reports by Year',settings:'Settings',profile:'Admin Profile'}[v]||'Dashboard');}
+
+function render(){
+ destroyCharts(); const t=viewTitle(activeView);$('viewTitle').textContent=t;
+ $('nav').querySelectorAll('button[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===activeView));
+ let html='';
+ if(activeView==='dashboard')html=dashboard();
+ else if(activeView==='reports')html=reportsView();
+ else if(activeView==='potholes')html=potholesView();
+ else if(['new','waiting','pending','progress','successful','high'].includes(activeView)){const map={new:'New',waiting:'Waiting',pending:'Pending',progress:'In Progress',successful:'Successful / Completed',high:null};let a=allReports();if(map[activeView])a=a.filter(r=>r.status===map[activeView]);if(activeView==='high')a=a.filter(r=>['Critical','High'].includes(r.priority));html=reportsView(t,sortReports(a));}
+ else if(activeView==='analytics')html=analytics();
+ else if(activeView==='map')html=mapView();
+ else if(['date','month','year'].includes(activeView))html=dateView(activeView);
+ else if(activeView==='settings')html=settingsView();
+ else if(activeView==='profile')html=profileView();
+ $('view').innerHTML=html; bindFilters();
+ document.querySelectorAll('[data-map]').forEach(b=>b.onclick=e=>{const q=e.currentTarget.dataset.map;window.open('https://www.google.com/maps?q='+encodeURIComponent(q),'_blank','noopener');});
+ if(activeView==='analytics')requestAnimationFrame(renderCharts);
+ if(activeView==='settings')$('saveSettings')?.addEventListener('click',saveSettings);
+ if(activeView==='profile')$('profileLogout')?.addEventListener('click',logout);
 }
 
-function dateView(kind) {
-  let a = allReports(); const now = new Date();
-  if (kind === 'date') a = a.filter(r => r.date === now.toISOString().slice(0, 10));
-  if (kind === 'month') a = a.filter(r => Number(r.month) === now.getMonth() + 1 && Number(r.year) === now.getFullYear());
-  if (kind === 'year') a = a.filter(r => Number(r.year) === now.getFullYear());
-  const avg = a.length ? a.reduce((s, r) => s + (Number(r.detectionConfidence) || 0), 0) / a.length : 0;
-  return `<div class="grid"><div class="card metric"><b>${a.length}</b><span>Reports in selected period</span></div><div class="card metric"><b>${new Set(a.map(r => r.potholeId)).size}</b><span>Unique Potholes</span></div><div class="card metric"><b>${Math.round(avg * 100)}%</b><span>Average Confidence</span></div><div class="card metric"><b>${a.filter(r => r.status === 'Successful / Completed').length}</b><span>Completed</span></div></div><div class="section card"><h2>${kind === 'date' ? 'Today' : kind === 'month' ? 'This Month' : 'This Year'}</h2>${reportRows(a)}</div>`;
+async function saveSettings(){
+ try{const data={duplicateDistanceMeters:Number($('setDistance').value)||35,confidenceThreshold:Math.min(1,Math.max(0,Number($('setConfidence').value)||.45)),defaultStatus:$('setStatus').value,updatedAt:Date.now(),updatedBy:uid};await update(ref(db,'settings'),data);toast('Settings updated successfully');}
+ catch(e){toast('Failed to save settings');}
 }
 
-function settingsView() {
-  const s = settings || {};
-  return `<div class="card"><h2>System Threshold Settings</h2><div class="detail-grid"><div><div class="field"><label>Duplicate Detection Distance (Meters)</label><input id="setDistance" class="input" type="number" min="1" value="${esc(s.duplicateDistanceMeters ?? 35)}"></div><div class="field"><label>AI Confidence Threshold (0.0 to 1.0)</label><input id="setConfidence" class="input" type="number" min="0" max="1" step="0.01" value="${esc(s.confidenceThreshold ?? 0.45)}"></div></div><div><div class="field"><label>Default New Report Status</label><select id="setStatus" class="select"><option ${s.defaultStatus === 'New' ? 'selected' : ''}>New</option><option ${s.defaultStatus === 'Waiting' ? 'selected' : ''}>Waiting</option><option ${s.defaultStatus === 'Pending' ? 'selected' : ''}>Pending</option></select></div></div></div><button id="saveSettings" class="btn primary" style="margin-top:12px">Save Settings</button></div>`;
+function field(label,value){return `<p><b>${esc(label)}:</b> ${esc(safe(value))}</p>`;}
+function openReport(id){
+ const r=reports[id]||allReports().find(x=>(x.reportId===id||x.id===id||x._key===id));if(!r)return;
+ const key=r.reportId||r.id||id, a=addressOf(r),lat=latOf(r),lon=lonOf(r),conf=detectionConfidence(r);
+ const hs=histories[key]?Object.values(histories[key]).sort((a,b)=>(a.timestamp||0)-(b.timestamp||0)):[];
+ const obs=Object.values(observations||{}).filter(o=>o.reportId===key).sort((a,b)=>(b.timestamp||0)-(a.timestamp||0));
+ $('modalCard').innerHTML=`<h2>Report Details: ${esc(key)}</h2>
+ <div class="detail-grid">
+ <div>${imageOf(r)?`<a href="${esc(imageOf(r))}" target="_blank" rel="noopener"><img class="detail-img" src="${esc(imageOf(r))}" alt="Pothole evidence" onerror="this.outerHTML='<div class=&quot;empty&quot;>Evidence image unavailable</div>'"></a>`:'<div class="empty">No evidence image available</div>'}</div>
+ <div><h3>Report Information</h3>${field('Report ID',r.reportId||r.id)}${field('Pothole ID',r.potholeId)}${field('Status',r.status||'New')}${field('Priority',r.priority||'Low')}${field('Created At',fmtTs(r.createdAt))}${field('Updated At',fmtTs(r.updatedAt))}<h3>AI Detection</h3>${field('Class',r.detection?.className||r.detectionClass||'pothole')}${field('Confidence',conf===null?'N/A':Math.round(conf*100)+'%')}${field('Source',r.detection?.source||'camera')}</div>
+ </div>
+ <div class="section card"><h3>Complete Location</h3><div class="detail-grid">
+ <div>${field('Full Address',a.formatted||r.address)}${field('Road / Street',a.road)}${field('Area',a.area)}${field('Locality',a.locality)}${field('City',a.city)}${field('District',a.district)}</div>
+ <div>${field('State',a.state)}${field('Country',a.country)}${field('PIN / Postal Code',a.postalCode)}${field('Latitude',lat)}${field('Longitude',lon)}${field('GPS Accuracy',accuracyOf(r)!==null?accuracyOf(r)+' m':'N/A')}${field('Location Timestamp',fmtTs(a.timestamp||locationOf(r).timestamp))}${lat!==null&&lon!==null?`<button class="btn primary" id="modalMap">View on Map</button>`:'<p style="color:var(--muted)">Location coordinates unavailable</p>'}</div>
+ </div></div>
+ <div class="section card"><h3>Evidence & Device</h3>${field('Captured At',fmtTs(r.evidence?.capturedAt||r.capturedAt))}${field('Platform',r.device?.platform||r.platform)}${field('Language',r.device?.language||r.language)}</div>
+ <div class="section"><h3>Update Status</h3><div style="display:flex;flex-wrap:wrap;gap:8px">${['New','Waiting','Pending','In Progress','Successful / Completed'].map(s=>`<button class="btn" data-status="${esc(s)}">${esc(s)}</button>`).join('')}</div></div>
+ <div class="section"><h3>Status Timeline</h3><div class="timeline">${hs.length?hs.map(h=>`<div class="timeline-item"><b>${esc(safe(h.status))}</b><small>${esc(fmtTs(h.timestamp))}${h.actor?' • '+esc(h.actor):''}</small>${h.note?`<div>${esc(h.note)}</div>`:''}</div>`).join(''):'<div class="empty">No status updates logged</div>'}</div></div>
+ <div class="section"><h3>Observations (${obs.length})</h3>${obs.length?obs.slice(0,10).map(o=>`<div class="card" style="margin-bottom:8px"><b>${esc(safe(o.observationId||o.id,'Observation'))}</b><div style="color:var(--muted);font-size:12px">${esc(fmtTs(o.timestamp))} • ${esc(safe(o.source,'detector'))}</div></div>`).join(''):'<div class="empty">No observations recorded</div>'}</div>
+ <div style="text-align:right;margin-top:14px"><button id="closeModal" class="btn">Close Window</button></div>`;
+ $('modal').classList.remove('hidden');$('closeModal').onclick=closeModal;
+ $('modalMap')?.addEventListener('click',()=>window.open('https://www.google.com/maps?q='+encodeURIComponent(lat+','+lon),'_blank','noopener'));
+ document.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>changeStatus(key,b.dataset.status));
 }
-
-function profileView() {
-  return `<div class="card"><h2>Admin Profile Information</h2><p><b>Email:</b> ${esc(auth.currentUser?.email || 'N/A')}</p><p><b>Firebase UID:</b> <small>${esc(auth.currentUser?.uid || 'N/A')}</small></p><button class="btn danger" id="profileLogout">Logout Account</button></div>`;
+function closeModal(){$('modal').classList.add('hidden');}
+async function changeStatus(id,status){
+ if(!auth.currentUser)return;
+ try{const now=Date.now(),hRef=push(ref(db,`statusHistory/${id}`)),updates={};updates[`reports/${id}/status`]=status;updates[`reports/${id}/updatedAt`]=now;updates[`reports/${id}/repairStatus`]=status==='Successful / Completed'?'Completed':status==='In Progress'?'In Progress':'Unresolved';
+ const r=reports[id];if(r?.potholeId){updates[`potholes/${r.potholeId}/status`]=status;updates[`potholes/${r.potholeId}/updatedAt`]=now;}
+ updates[`statusHistory/${id}/${hRef.key}`]={status,timestamp:now,adminUid:uid,actor:auth.currentUser.email||'admin',note:`Status updated to ${status}`};
+ await update(ref(db),updates);toast('Status updated');openReport(id);
+ }catch(e){console.error(e);toast('Error updating status');}
 }
+async function logout(){try{await signOut(auth);}catch(e){}}
 
-function viewTitle(v) {
-  return ({ dashboard: 'Dashboard', reports: 'All Reports', potholes: 'Potholes', new: 'New Reports', waiting: 'Waiting', pending: 'Pending', progress: 'In Progress', successful: 'Successful / Completed', high: 'High Priority', analytics: 'Analytics', map: 'Map / Locations', date: 'Reports by Date', month: 'Reports by Month', year: 'Reports by Year', settings: 'Settings', profile: 'Admin Profile' }[v] || 'Dashboard');
+function subscribe(){
+ unsubscribeFns.forEach(fn=>fn?.());unsubscribeFns=[];
+ const listen=(path,cb)=>{const u=onValue(ref(db,path),cb,err=>{console.error(path,err);setSync('Firebase error');toast('Firebase connection error');});unsubscribeFns.push(u);};
+ setSync('Connected • listening for realtime reports');
+ listen('reports',s=>{reports=s.val()||{};setSync('Connected • reports synced '+new Date().toLocaleTimeString());render();});
+ listen('potholes',s=>{potholes=s.val()||{};if(activeView==='dashboard'||activeView==='potholes')render();});
+ listen('observations',s=>{observations=s.val()||{};});
+ listen('statusHistory',s=>{histories=s.val()||{};});
+ listen('settings',s=>{settings=s.val()||{};if(activeView==='settings')render();});
+ // Actual RTDB connection state.
+ listen('.info/connected',s=>setSync(s.val()===true?'Connected • realtime active':'Offline / reconnecting…'));
 }
+function openApp(){$('loginView').classList.add('hidden');$('appView').classList.remove('hidden');$('adminEmail').textContent=auth.currentUser?.email||'';subscribe();render();}
+function openLogin(){$('appView').classList.add('hidden');$('loginView').classList.remove('hidden');}
+function formatAuthError(err){const code=err.code||'';if(code.includes('invalid-credential')||code.includes('wrong-password')||code.includes('user-not-found'))return'Invalid email or password.';if(code.includes('email-already-in-use'))return'This email is already registered. Click Login.';if(code.includes('weak-password'))return'Password must be at least 6 characters.';if(code.includes('invalid-email'))return'Please enter a valid email address.';return(err.message||'Authentication failed.').replace('Firebase:','').trim();}
+function toggleAuthMode(signup){isSignupMode=signup;if(signup){$('confirmWrap').classList.remove('hidden');$('authTitle').textContent='Create Admin Account';$('loginBtn').textContent='Back to Login';$('loginBtn').classList.remove('primary');$('signupBtn').textContent='Submit Signup';$('signupBtn').classList.add('primary');}else{$('confirmWrap').classList.add('hidden');$('authTitle').textContent='Pothole AI Admin';$('loginBtn').textContent='Login';$('loginBtn').classList.add('primary');$('signupBtn').textContent='Create Account';$('signupBtn').classList.remove('primary');}showAuthMsg('');}
 
-function render() {
-  destroyCharts();
-  const t = viewTitle(activeView);
-  $('viewTitle').textContent = t;
-  $('nav').querySelectorAll('button[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === activeView));
-  let html = '';
-  if (activeView === 'dashboard') html = dashboard();
-  else if (activeView === 'reports') html = reportsView();
-  else if (activeView === 'potholes') html = potholesView();
-  else if (['new', 'waiting', 'pending', 'progress', 'successful', 'high'].includes(activeView)) {
-    const map = { new: 'New', waiting: 'Waiting', pending: 'Pending', progress: 'In Progress', successful: 'Successful / Completed', high: null };
-    let a = allReports();
-    if (map[activeView]) a = a.filter(r => r.status === map[activeView]);
-    if (activeView === 'high') a = a.filter(r => ['Critical', 'High'].includes(r.priority));
-    html = reportsView(t, a);
-  }
-  else if (activeView === 'analytics') html = analytics();
-  else if (activeView === 'map') html = mapView();
-  else if (['date', 'month', 'year'].includes(activeView)) html = dateView(activeView);
-  else if (activeView === 'settings') html = settingsView();
-  else if (activeView === 'profile') html = profileView();
+$('loginBtn').onclick=async()=>{if(isSignupMode){toggleAuthMode(false);return;}const e=$('email').value.trim(),p=$('password').value;if(!e||!p)return showAuthMsg('Please fill in both email and password.');try{showAuthMsg('Logging in...');await signInWithEmailAndPassword(auth,e,p);}catch(err){showAuthMsg(formatAuthError(err));}};
+$('signupBtn').onclick=async()=>{if(!isSignupMode){toggleAuthMode(true);return;}const e=$('email').value.trim(),p=$('password').value,cp=$('confirmPassword').value;if(!e||!p)return showAuthMsg('Please enter email and password.');if(p!==cp)return showAuthMsg('Passwords do not match.');try{showAuthMsg('Creating account...');await createUserWithEmailAndPassword(auth,e,p);}catch(err){showAuthMsg(formatAuthError(err));}};
+$('logoutBtn').onclick=logout;$('logoutSide').onclick=logout;$('hamb').onclick=()=>$('sidebar').classList.toggle('open');$('modal').onclick=e=>{if(e.target===$('modal'))closeModal()};
+$('nav').onclick=e=>{const b=e.target.closest('button[data-view]');if(!b)return;activeView=b.dataset.view;$('sidebar').classList.remove('open');render();};
 
-  $('view').innerHTML = html;
-  bindFilters();
-  if (activeView === 'analytics') setTimeout(renderCharts, 50);
-  if (activeView === 'settings') $('saveSettings')?.addEventListener('click', saveSettings);
-  if (activeView === 'profile') $('profileLogout')?.addEventListener('click', logout);
-}
-
-async function saveSettings() {
-  try {
-    const data = { duplicateDistanceMeters: Number($('setDistance').value) || 35, confidenceThreshold: Math.min(1, Math.max(0, Number($('setConfidence').value) || .45)), defaultStatus: $('setStatus').value, updatedAt: Date.now(), updatedBy: uid };
-    await update(ref(db, 'settings'), data);
-    toast('Settings updated successfully');
-  } catch (err) { toast('Failed to save settings'); }
-}
-
-async function openReport(id) {
-  const r = reports[id] || allReports().find(x => (x.reportId === id || x.id === id));
-  if (!r) return;
-  const reportKey = r.reportId || r.id || id;
-  const hs = histories[reportKey] ? Object.values(histories[reportKey]).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)) : [];
-  const obs = Object.values(observations || {}).filter(o => o.reportId === reportKey).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-  $('modalCard').innerHTML = `<h2>Report Details: ${esc(reportKey)}</h2><div class="detail-grid"><div>${r.imageUrl ? `<img class="detail-img" src="${esc(r.imageUrl)}" alt="Pothole">` : '<div class="empty">Image not available</div>'}</div><div><p><b>Pothole ID:</b> ${esc(r.potholeId || 'N/A')}</p><p><b>Confidence:</b> ${r.detectionConfidence != null ? Math.round(r.detectionConfidence * 100) + '%' : 'Not available'}</p><p><b>Coordinates:</b> ${r.latitude != null ? `${r.latitude}, ${r.longitude}` : 'Not available'}</p><p><b>Accuracy:</b> ${r.locationAccuracy != null ? Math.round(r.locationAccuracy) + ' m' : 'Not available'}</p><p><b>First Detected:</b> ${esc(fmtTs(r.firstDetectedAt))}</p><p><b>Last Detected:</b> ${esc(fmtTs(r.lastDetectedAt || r.timestamp))}</p><p><b>Occurrences:</b> ${Number(r.occurrenceCount) || 1}</p><p><b>Priority:</b> <span class="badge ${priorityClass(r.priority)}">${esc(r.priority || 'Low')}</span></p><p><b>Status:</b> ${esc(r.status || 'New')}</p></div></div><div class="section"><h3>Update Status</h3><div style="display:flex;flex-wrap:wrap;gap:8px">${['New', 'Waiting', 'Pending', 'In Progress', 'Successful / Completed'].map(s => `<button class="btn" data-status="${esc(s)}">${esc(s)}</button>`).join('')}</div></div><div class="section"><h3>Status Timeline</h3><div class="timeline">${hs.length ? hs.map(h => `<div class="timeline-item"><b>${esc(h.status)}</b><small>${esc(fmtTs(h.timestamp))} • ${esc(h.actor || 'admin')}</small>${h.note ? `<div>${esc(h.note)}</div>` : ''}</div>`).join('') : '<div class="empty">No status updates logged</div>'}</div></div><div class="section"><h3>Observations (${obs.length})</h3>${obs.length ? obs.slice(0, 10).map(o => `<div class="card" style="margin-bottom:8px"><b>${esc(o.observationId || o.id || 'Observation')}</b><div style="color:var(--muted);font-size:12px">${esc(fmtTs(o.timestamp))} • ${esc(o.source || 'detector')}</div></div>`).join('') : '<div class="empty">No observations recorded</div>'}</div><div style="text-align:right;margin-top:14px"><button id="closeModal" class="btn">Close Window</button></div>`;
-
-  $('modal').classList.remove('hidden');
-  $('closeModal').onclick = closeModal;
-  document.querySelectorAll('[data-status]').forEach(b => b.onclick = () => changeStatus(reportKey, b.dataset.status));
-}
-
-function closeModal() { $('modal').classList.add('hidden'); }
-
-async function changeStatus(id, status) {
-  if (!auth.currentUser) return;
-  try {
-    const now = Date.now();
-    const hRef = push(ref(db, `statusHistory/${id}`));
-    const updates = {};
-    updates[`reports/${id}/status`] = status;
-    updates[`reports/${id}/updatedAt`] = now;
-    updates[`reports/${id}/repairStatus`] = status === 'Successful / Completed' ? 'Completed' : status === 'In Progress' ? 'In Progress' : 'Unresolved';
-    if (reports[id]?.potholeId) {
-      updates[`potholes/${reports[id].potholeId}/status`] = status;
-      updates[`potholes/${reports[id].potholeId}/updatedAt`] = now;
-    }
-    updates[`statusHistory/${id}/${hRef.key}`] = { status, timestamp: now, adminUid: uid, actor: auth.currentUser.email || 'admin', note: `Status updated to ${status}` };
-    await update(ref(db), updates);
-    toast('Status updated');
-    openReport(id);
-  } catch (err) { toast('Error updating status'); console.error(err); }
-}
-
-async function logout() { await signOut(auth); }
-
-function subscribe() {
-  setSync('Realtime sync active');
-  onValue(ref(db, 'reports'), s => { reports = s.val() || {}; setSync('Synced ' + new Date().toLocaleTimeString()); render(); });
-  onValue(ref(db, 'potholes'), s => { potholes = s.val() || {}; render(); });
-  onValue(ref(db, 'observations'), s => { observations = s.val() || {}; });
-  onValue(ref(db, 'statusHistory'), s => { histories = s.val() || {}; });
-  onValue(ref(db, 'settings'), s => { settings = s.val() || {}; if (activeView === 'settings') render(); });
-}
-
-function openApp() {
-  $('loginView').classList.add('hidden');
-  $('appView').classList.remove('hidden');
-  $('adminEmail').textContent = auth.currentUser?.email || '';
-  subscribe();
-  render();
-}
-
-function openLogin() {
-  $('appView').classList.add('hidden');
-  $('loginView').classList.remove('hidden');
-}
-
-function formatAuthError(err) {
-  const code = err.code || '';
-  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Invalid email or password.';
-  if (code.includes('email-already-in-use')) return 'This email is already registered. Click Login.';
-  if (code.includes('weak-password')) return 'Password must be at least 6 characters.';
-  if (code.includes('invalid-email')) return 'Please enter a valid email address.';
-  return err.message.replace('Firebase:', '').trim();
-}
-
-function toggleAuthMode(signup) {
-  isSignupMode = signup;
-  if (isSignupMode) {
-    $('confirmWrap').classList.remove('hidden');
-    $('authTitle').textContent = 'Create Admin Account';
-    $('loginBtn').textContent = 'Back to Login';
-    $('loginBtn').classList.remove('primary');
-    $('signupBtn').textContent = 'Submit Signup';
-    $('signupBtn').classList.add('primary');
-  } else {
-    $('confirmWrap').classList.add('hidden');
-    $('authTitle').textContent = 'Pothole AI Admin';
-    $('loginBtn').textContent = 'Login';
-    $('loginBtn').classList.add('primary');
-    $('signupBtn').textContent = 'Create Account';
-    $('signupBtn').classList.remove('primary');
-  }
-  showAuthMsg('');
-}
-
-$('loginBtn').onclick = async () => {
-  if (isSignupMode) { toggleAuthMode(false); return; }
-  const e = $('email').value.trim(), p = $('password').value;
-  if (!e || !p) return showAuthMsg('Please fill in both email and password.');
-  try {
-    showAuthMsg('Logging in...');
-    await signInWithEmailAndPassword(auth, e, p);
-  } catch (err) { showAuthMsg(formatAuthError(err)); }
-};
-
-$('signupBtn').onclick = async () => {
-  if (!isSignupMode) { toggleAuthMode(true); return; }
-  const e = $('email').value.trim(), p = $('password').value, cp = $('confirmPassword').value;
-  if (!e || !p) return showAuthMsg('Please enter email and password.');
-  if (p !== cp) return showAuthMsg('Passwords do not match.');
-  try {
-    showAuthMsg('Creating account...');
-    await createUserWithEmailAndPassword(auth, e, p);
-  } catch (err) { showAuthMsg(formatAuthError(err)); }
-};
-
-$('logoutBtn').onclick = logout;
-$('logoutSide').onclick = logout;
-$('hamb').onclick = () => $('sidebar').classList.toggle('open');
-$('modal').onclick = e => { if (e.target === $('modal')) closeModal(); };
-$('nav').onclick = e => {
-  const b = e.target.closest('button[data-view]');
-  if (!b) return;
-  activeView = b.dataset.view;
-  $('sidebar').classList.remove('open');
-  render();
-};
-
-try {
-  app = initializeApp(firebaseConfig);
-  db = getDatabase(app);
-  auth = getAuth(app);
-  onAuthStateChanged(auth, user => {
-    if (user) { uid = user.uid; openApp(); }
-    else { uid = null; openLogin(); }
-  });
-} catch (e) {
-  showAuthMsg('Firebase initialization failed. Verify Firebase credentials.');
-  console.error(e);
-}
-
-window.openReport = openReport;
+try{
+ app=initializeApp(firebaseConfig);db=getDatabase(app);auth=getAuth(app);
+ onAuthStateChanged(auth,user=>{if(user){uid=user.uid;openApp();}else{unsubscribeFns.forEach(fn=>fn?.());unsubscribeFns=[];uid=null;openLogin();}});
+}catch(e){showAuthMsg('Firebase initialization failed. Verify Firebase credentials.');console.error(e);}
+window.openReport=openReport;
 </script>
 </body>
 </html>
