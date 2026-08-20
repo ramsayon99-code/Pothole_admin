@@ -81,7 +81,7 @@ import { getDatabase, ref, onValue, update, push, onDisconnect } from 'https://w
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBRnoO9_blBIA7a1-hrmXUBoqY5wEoARU",
+  apiKey: "AIzaSyBRnoO9_blBIA7a1-hr-mXUBoqY5wEoARU",
   authDomain: "ai-model-yolo.firebaseapp.com",
   databaseURL: "https://ai-model-yolo-default-rtdb.firebaseio.com",
   projectId: "ai-model-yolo",
@@ -89,6 +89,7 @@ const firebaseConfig = {
   messagingSenderId: "990596444572",
   appId: "1:990596444572:web:1ceaae58c602f5c2175859"
 };
+
 
 let app, db, auth, uid = null;
 let reports = {}, potholes = {}, observations = {}, histories = {}, settings = {};
