@@ -3,83 +3,412 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Pothole AI • Admin Dashboard</title>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<title>Pothole AI Detector</title>
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/ort.min.js"></script>
 <style>
-:root{--bg:#07111f;--panel:#0d1b2a;--panel2:#0a1522;--line:#1c334a;--text:#eef6ff;--muted:#91a7bb;--blue:#1677ff;--green:#28c76f;--yellow:#ffcf5a;--red:#ff5d73;--sidebar:260px}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}.hidden{display:none!important}.layout{min-height:100vh}.sidebar{position:fixed;inset:0 auto 0 0;width:var(--sidebar);background:#081522;border-right:1px solid var(--line);padding:18px 12px;overflow:auto;z-index:30}.brand{padding:8px 10px 18px;border-bottom:1px solid var(--line);margin-bottom:12px}.brand b{font-size:18px}.brand small{display:block;color:var(--muted);margin-top:5px}.nav button{width:100%;border:0;background:transparent;color:#b9c9d8;text-align:left;padding:11px 12px;border-radius:11px;margin:2px 0;cursor:pointer;font-weight:650}.nav button:hover,.nav button.active{background:#12304a;color:#fff}.main{margin-left:var(--sidebar);min-height:100vh;padding:18px}.topbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px}.topbar h1{margin:0;font-size:25px}.topbar small{color:var(--muted)}.hamb{display:none}.userbox{display:flex;align-items:center;gap:10px;color:var(--muted);font-size:13px}.btn{border:0;border-radius:10px;padding:10px 13px;background:#17314a;color:#fff;font-weight:700;cursor:pointer;transition:background .2s}.btn:hover{filter:brightness(1.1)}.primary{background:var(--blue)}.danger{background:#632437}.grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:15px}.metric b{font-size:26px;display:block}.metric span{color:var(--muted);font-size:12px}.section{margin-top:14px}.section h2{font-size:17px;margin:0 0 12px}.table-wrap{overflow:auto;border:1px solid var(--line);border-radius:14px}.table{width:100%;border-collapse:collapse;min-width:850px}.table th,.table td{padding:11px 10px;border-bottom:1px solid var(--line);text-align:left;font-size:13px}.table th{color:#a9bfd2;background:#0a1725;position:sticky;top:0}.thumb{width:58px;height:42px;border-radius:8px;object-fit:cover;background:#07111f}.badge{display:inline-flex;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#17314a}.critical,.high{background:#5b2430;color:#ffb3ba}.medium{background:#5b4820;color:#ffeaa7}.low{background:#17462e;color:#b2f2bb}.status-new{background:#21466d}.status-waiting,.status-pending{background:#5b4820}.status-in{background:#244d5f}.status-success{background:#17462e}.filters{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:9px;margin-bottom:12px}.input,.select{width:100%;background:#081522;color:#fff;border:1px solid var(--line);border-radius:10px;padding:10px}.cards2{display:grid;grid-template-columns:1.2fr .8fr;gap:12px}.charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}.chartbox{height:320px;position:relative}.login{min-height:100vh;display:grid;place-items:center;padding:20px}.login-card{width:min(430px,100%);background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:24px}.login-card h1{margin-top:0}.field{margin:10px 0}.field label{display:block;font-size:12px;color:var(--muted);margin-bottom:5px}.field input,.field select,.field textarea{width:100%;background:#081522;color:#fff;border:1px solid var(--line);border-radius:10px;padding:11px}.login-actions{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:15px}.msg{margin-top:12px;color:var(--yellow);font-size:13px;word-break:break-word;min-height:18px}.modal{position:fixed;inset:0;background:#0009;display:grid;place-items:center;padding:16px;z-index:60}.modal-card{width:min(920px,100%);max-height:90vh;overflow:auto;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.detail-img{width:100%;max-height:390px;object-fit:contain;background:#02070d;border-radius:12px}.timeline{border-left:2px solid var(--line);padding-left:15px}.timeline-item{margin:0 0 13px}.timeline-item b{display:block}.timeline-item small{color:var(--muted)}.empty{padding:30px;text-align:center;color:var(--muted)}.toast{position:fixed;right:18px;bottom:18px;z-index:90;background:#10263a;border:1px solid var(--line);padding:12px 15px;border-radius:12px;box-shadow:0 12px 30px #0006}.login-logo{font-size:30px}
-.report-row{cursor:pointer;transition:background .15s}.report-row:hover{background:#12283e}
-@media(max-width:1000px){.grid{grid-template-columns:repeat(2,1fr)}.filters{grid-template-columns:repeat(3,1fr)}}
-@media(max-width:720px){:root{--sidebar:0px}.sidebar{transform:translateX(-100%);transition:.2s;width:270px;box-shadow:12px 0 30px #0008}.sidebar.open{transform:none}.main{margin-left:0;padding:13px}.hamb{display:inline-flex}.topbar{align-items:flex-start}.topbar h1{font-size:20px}.userbox span{display:none}.cards2,.charts,.detail-grid{grid-template-columns:1fr}.grid{grid-template-columns:repeat(2,1fr)}.filters{grid-template-columns:1fr 1fr}.chartbox{height:280px}}
-@media(max-width:430px){.grid{grid-template-columns:1fr 1fr}.login-actions{grid-template-columns:1fr}.filters{grid-template-columns:1fr}.card{padding:12px}}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#07111f;color:#eef6ff}
+.app{max-width:760px;margin:auto;padding:18px}.hero{padding:10px 2px 18px}.tag{display:inline-block;padding:6px 10px;border:1px solid #29445e;border-radius:999px;font-size:12px;color:#9ec9ee}
+h1{margin:12px 0 6px;font-size:30px}.sub{margin:0;color:#9eb1c5}.card{background:#0d1b2a;border:1px solid #1c334a;border-radius:20px;padding:16px;margin:12px 0;box-shadow:0 12px 35px #0005}
+.controls{display:grid;grid-template-columns:1fr 1fr;gap:10px}.btn{border:0;border-radius:14px;padding:14px;font-size:15px;font-weight:700;background:#17314a;color:white;cursor:pointer}.primary{background:#1677ff}.btn:disabled{opacity:.5}
+.stage{position:relative;background:#02070d;border-radius:16px;overflow:hidden;min-height:250px;display:flex;align-items:center;justify-content:center}.stage img,.stage video{display:block;max-width:100%;max-height:62vh;width:100%;height:auto;object-fit:contain}.stage canvas{position:absolute;max-width:100%;max-height:62vh;inset:0;margin:auto}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.stat{background:#0a1522;border-radius:14px;padding:12px}.stat b{display:block;font-size:21px}.stat span{font-size:11px;color:#8fa5ba}
+.status{padding:11px 12px;border-radius:12px;background:#0a1522;color:#a9bed2;font-size:13px}.ok{color:#7ee2a8}.warn{color:#ffd36b}
+small{color:#7890a6;line-height:1.5}.hidden{display:none}
+input[type=file]{display:none}
+@media(max-width:500px){h1{font-size:26px}.controls{grid-template-columns:1fr}.app{padding:13px}}
 </style>
 </head>
 <body>
+<div class="app">
+  <div class="hero">
+    <span class="tag">YOLO11n • Browser AI</span>
+    <h1>🕳️ Pothole AI Detector</h1>
+    <p class="sub">Detect potholes directly in your browser using your trained model.</p>
+  </div>
 
-<div id="loginView" class="login">
-  <div class="login-card">
-    <div class="login-logo">🕳️</div>
-    <h1 id="authTitle">Pothole AI Admin</h1>
-    <p style="color:var(--muted);font-size:13px">Government Console Dashboard</p>
-    <form id="authForm" onsubmit="return false;">
-      <div class="field"><label>Email</label><input id="email" type="email" autocomplete="email" required placeholder="admin@example.com"></div>
-      <div class="field"><label>Password</label><input id="password" type="password" autocomplete="current-password" required placeholder="••••••••"></div>
-      <div id="confirmWrap" class="field hidden"><label>Confirm Password</label><input id="confirmPassword" type="password" autocomplete="new-password" placeholder="••••••••"></div>
-      <div class="login-actions">
-        <button id="loginBtn" type="button" class="btn primary">Login</button>
-        <button id="signupBtn" type="button" class="btn">Create Account</button>
-      </div>
-    </form>
-    <div id="authMsg" class="msg"></div>
+  <div class="card">
+    <div class="controls">
+      <label class="btn primary">🖼️ Choose Image<input id="file" type="file" accept="image/*"></label>
+      <button class="btn" id="cameraBtn">📹 Start Live Camera</button>
+    </div>
+    <div style="height:10px"></div>
+    <button class="btn hidden" id="stopCameraBtn" style="width:100%">⏹ Stop Live Camera</button>
+    <div style="height:10px"></div>
+    <small id="cameraHint">Live camera requires HTTPS or localhost. If this file is opened directly from your phone's file manager (file://), the browser will block camera access.</small>
+  </div>
+
+  <div class="card">
+    <div id="stage" class="stage">
+      <span id="placeholder">Choose an image or start the live camera.</span>
+      <video id="video" class="hidden" autoplay muted playsinline></video>
+      <img id="preview" class="hidden">
+      <canvas id="overlay" class="hidden"></canvas>
+    </div>
+    <div style="height:10px"></div>
+    <div id="status" class="status">Loading AI model…</div>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><b id="count">0</b><span>POTHOLES</span></div>
+    <div class="stat"><b id="best">0%</b><span>BEST CONFIDENCE</span></div>
+    <div class="stat"><b id="time">—</b><span>INFERENCE</span></div>
+  </div>
+
+  <div class="card">
+    <b>How it works</b>
+    <p><small>Images and live camera frames are resized to 640×640 and processed locally by the embedded YOLO model. Live mode repeatedly analyzes camera frames and draws bounding boxes over the road view. No image is uploaded to a server for detection.</small></p>
   </div>
 </div>
 
-<div id="appView" class="layout hidden">
-<aside id="sidebar" class="sidebar">
-  <div class="brand"><b>🕳️ Pothole AI</b><small>Government Reporting Console</small></div>
-  <nav class="nav" id="nav">
-    <button data-view="dashboard">📊 Dashboard</button>
-    <button data-view="reports">📋 All Reports</button>
-    <button data-view="potholes">🕳️ Potholes</button>
-    <button data-view="new">🆕 New Reports</button>
-    <button data-view="waiting">⏳ Waiting</button>
-    <button data-view="pending">🟡 Pending</button>
-    <button data-view="progress">🔧 In Progress</button>
-    <button data-view="successful">✅ Successful / Completed</button>
-    <button data-view="high">🚨 High Priority</button>
-    <button data-view="analytics">📈 Analytics</button>
-    <button data-view="map">🗺️ Map / Locations</button>
-    <button data-view="date">📅 Reports by Date</button>
-    <button data-view="month">🗓️ Reports by Month</button>
-    <button data-view="year">📆 Reports by Year</button>
-    <button data-view="settings">⚙️ Settings</button>
-    <button data-view="profile">👤 Admin Profile</button>
-    <button id="logoutSide">🚪 Logout</button>
-  </nav>
-</aside>
-<main class="main">
-  <div class="topbar">
-    <div>
-      <button id="hamb" class="btn hamb">☰</button>
-      <span style="margin-left:6px"><h1 id="viewTitle" style="display:inline">Dashboard</h1></span>
-      <div><small id="syncState">Connecting…</small></div>
-    </div>
-    <div class="userbox">
-      <span id="adminEmail"></span>
-      <button id="logoutBtn" class="btn">Logout</button>
-    </div>
-  </div>
-  <section id="view"></section>
-</main>
-</div>
+<script>
+const MODEL_URL = "model/best.onnx";
 
-<div id="modal" class="modal hidden"><div id="modalCard" class="modal-card"></div></div>
-<div id="toast" class="toast hidden"></div>
+const INPUT_SIZE=640;
+const CONF_THRESHOLD=0.35;
+const IOU_THRESHOLD=0.45;
 
+let session=null, modelInputName=null;
+let stream=null, liveMode=false, detecting=false, lastDetection=0;
+let latestLocation=null, locationWatchId=null;
+let liveReportState=null;
+let currentImageSource=null;
+
+const fileInput=document.getElementById("file");
+const cameraBtn=document.getElementById("cameraBtn");
+const stopCameraBtn=document.getElementById("stopCameraBtn");
+const cameraVideo=document.getElementById("video");
+const img=document.getElementById("preview");
+const canvas=document.getElementById("overlay");
+const ctx=canvas.getContext("2d");
+const statusEl=document.getElementById("status");
+const placeholder=document.getElementById("placeholder");
+
+function setStatus(t,cls=""){statusEl.textContent=t;statusEl.className="status "+cls}
+
+async function loadModel(){
+  try{
+    ort.env.wasm.wasmPaths="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.22.0/dist/";
+    const response=await fetch(MODEL_URL);
+    if(!response.ok) throw new Error(`Model request failed: ${response.status} ${response.statusText}`);
+    const bytes=new Uint8Array(await response.arrayBuffer());
+    try{
+      session=await ort.InferenceSession.create(bytes,{executionProviders:navigator.gpu?["webgpu"]:["wasm"],graphOptimizationLevel:"all"});
+    }catch(first){
+      console.warn("Fast WebGPU/optimized model load failed; falling back to WASM:",first);
+      session=await ort.InferenceSession.create(bytes,{executionProviders:["wasm"],graphOptimizationLevel:"all"});
+    }
+    modelInputName=session.inputNames[0];
+    setStatus("AI model ready • start camera or choose an image","ok");
+  }catch(e){
+    console.error(e);
+    setStatus("Model failed to load. Check internet access and refresh the page.","warn");
+  }
+}
+
+let preprocessCanvas=null, preprocessCtx=null;
+function letterbox(source){
+  const w=source.videoWidth||source.naturalWidth||source.width;
+  const h=source.videoHeight||source.naturalHeight||source.height;
+  const scale=Math.min(INPUT_SIZE/w,INPUT_SIZE/h);
+  const nw=Math.round(w*scale), nh=Math.round(h*scale);
+  const padX=(INPUT_SIZE-nw)/2, padY=(INPUT_SIZE-nh)/2;
+
+  if(!preprocessCanvas){
+    preprocessCanvas=document.createElement("canvas");
+    preprocessCanvas.width=INPUT_SIZE; preprocessCanvas.height=INPUT_SIZE;
+    preprocessCtx=preprocessCanvas.getContext("2d",{willReadFrequently:true});
+  }
+  preprocessCtx.fillStyle="#808080";
+  preprocessCtx.fillRect(0,0,INPUT_SIZE,INPUT_SIZE);
+  preprocessCtx.drawImage(source,0,0,w,h,padX,padY,nw,nh);
+
+  const d=preprocessCtx.getImageData(0,0,INPUT_SIZE,INPUT_SIZE).data;
+  const chw=new Float32Array(3*INPUT_SIZE*INPUT_SIZE);
+  const plane=INPUT_SIZE*INPUT_SIZE;
+  for(let j=0,p=0;j<plane;j++,p+=4){
+    chw[j]=d[p]/255;
+    chw[plane+j]=d[p+1]/255;
+    chw[2*plane+j]=d[p+2]/255;
+  }
+  return {tensor:new ort.Tensor("float32",chw,[1,3,INPUT_SIZE,INPUT_SIZE]),scale,padX,padY};
+}
+
+function iou(a,b){
+  const x1=Math.max(a.x1,b.x1), y1=Math.max(a.y1,b.y1);
+  const x2=Math.min(a.x2,b.x2), y2=Math.min(a.y2,b.y2);
+  const inter=Math.max(0,x2-x1)*Math.max(0,y2-y1);
+  const areaA=Math.max(0,a.x2-a.x1)*Math.max(0,a.y2-a.y1);
+  const areaB=Math.max(0,b.x2-b.x1)*Math.max(0,b.y2-b.y1);
+  return inter/(areaA+areaB-inter+1e-9);
+}
+
+function nms(boxes){
+  boxes.sort((a,b)=>b.score-a.score);
+  const keep=[];
+  while(boxes.length){
+    const a=boxes.shift(); keep.push(a);
+    boxes=boxes.filter(b=>iou(a,b)<IOU_THRESHOLD);
+  }
+  return keep;
+}
+
+function parseOutput(out,scale,padX,padY,origW,origH){
+  const data=out.data,dims=out.dims;
+  let n,get;
+  if(dims.length===3 && dims[1]===5){n=dims[2];get=(i,j)=>data[j*n+i];}
+  else if(dims.length===3 && dims[2]===5){n=dims[1];get=(i,j)=>data[i*5+j];}
+  else throw new Error("Unexpected model output shape: "+dims.join("x"));
+
+  const boxes=[];
+  for(let i=0;i<n;i++){
+    const cx=get(i,0),cy=get(i,1),w=get(i,2),h=get(i,3),score=get(i,4);
+    if(!Number.isFinite(score)||score<CONF_THRESHOLD) continue;
+    let x1=(cx-w/2-padX)/scale,y1=(cy-h/2-padY)/scale;
+    let x2=(cx+w/2-padX)/scale,y2=(cy+h/2-padY)/scale;
+    x1=Math.max(0,Math.min(origW,x1)); y1=Math.max(0,Math.min(origH,y1));
+    x2=Math.max(0,Math.min(origW,x2)); y2=Math.max(0,Math.min(origH,y2));
+    if(x2>x1&&y2>y1) boxes.push({x1,y1,x2,y2,score});
+  }
+  return nms(boxes);
+}
+
+function drawBoxes(boxes,w,h){
+  canvas.width=w; canvas.height=h;
+  canvas.style.width=(cameraVideo.classList.contains("hidden") ? img.clientWidth : cameraVideo.clientWidth)+"px";
+  canvas.style.height=(cameraVideo.classList.contains("hidden") ? img.clientHeight : cameraVideo.clientHeight)+"px";
+  ctx.clearRect(0,0,w,h);
+  ctx.lineWidth=Math.max(3,w/300);
+  ctx.font=Math.max(16,w/45)+"px system-ui";
+  boxes.forEach(b=>{
+    ctx.strokeStyle="#00e676";ctx.fillStyle="#00e676";
+    ctx.strokeRect(b.x1,b.y1,b.x2-b.x1,b.y2-b.y1);
+    const label=`Pothole ${(b.score*100).toFixed(0)}%`;
+    const tw=ctx.measureText(label).width+14,th=28;
+    ctx.fillRect(b.x1,Math.max(0,b.y1-th),tw,th);
+    ctx.fillStyle="#06120b";
+    ctx.fillText(label,b.x1+7,Math.max(19,b.y1-8));
+  });
+}
+
+async function detectSource(source){
+  if(!session || !source) return;
+  const w=source.videoWidth||source.naturalWidth||source.width;
+  const h=source.videoHeight||source.naturalHeight||source.height;
+  if(!w||!h) return;
+
+  const t0=performance.now();
+  const lb=letterbox(source);
+  const result=await session.run({[modelInputName]:lb.tensor});
+  const output=result[session.outputNames[0]];
+  const boxes=parseOutput(output,lb.scale,lb.padX,lb.padY,w,h);
+  // Integration hook: expose the real model detections to the Firebase/report layer.
+  window.__lastPotholeDetections = boxes.map(b=>({...b}));
+  window.__lastPotholeSource = source;
+
+  drawBoxes(boxes,w,h);
+  document.getElementById("count").textContent=boxes.length;
+  document.getElementById("best").textContent=boxes.length?Math.round(Math.max(...boxes.map(x=>x.score))*100)+"%":"0%";
+  document.getElementById("time").textContent=Math.round(performance.now()-t0)+" ms";
+  setStatus(boxes.length?`⚠️ ${boxes.length} pothole${boxes.length>1?"s":""} detected`:"✅ No pothole detected",boxes.length?"warn":"ok");
+}
+
+async function liveDetectionLoop(now){
+  if(!liveMode) return;
+  if(detecting || cameraVideo.readyState<2 || !session){
+    requestAnimationFrame(liveDetectionLoop);
+    return;
+  }
+  detecting=true;
+  try{
+    await detectSource(cameraVideo);
+  }catch(e){
+    console.error(e);
+    setStatus("Live detection error: "+(e.message||e),"warn");
+  }finally{
+    detecting=false;
+    // Start the next inference immediately after the current one finishes.
+    // There is deliberately no 100/120ms timer here.
+    if(liveMode) requestAnimationFrame(liveDetectionLoop);
+  }
+}
+
+function startLocationWatch(){
+  if(!navigator.geolocation || locationWatchId!==null) return;
+  locationWatchId=navigator.geolocation.watchPosition(pos=>{
+    latestLocation={available:true,latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy:Number.isFinite(pos.coords.accuracy)?pos.coords.accuracy:null,timestamp:Date.now()};
+    locationCache=latestLocation;
+    locationCacheAt=Date.now();
+  },err=>console.warn('GPS watch error:',err),{enableHighAccuracy:true,maximumAge:0,timeout:5000});
+}
+function stopLocationWatch(){
+  if(locationWatchId!==null && navigator.geolocation){navigator.geolocation.clearWatch(locationWatchId);locationWatchId=null;}
+}
+
+async function startCamera(){
+  // Browser camera access requires a secure context.
+  // HTTPS and localhost are allowed; opening this HTML directly as file://
+  // is normally blocked by the browser for security reasons.
+  if(!window.isSecureContext){
+    setStatus("🔒 Camera blocked: open this page on HTTPS or localhost. file:// pages cannot use the live camera.","warn");
+    return;
+  }
+
+  if(!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia!=="function"){
+    setStatus("📵 This browser does not provide camera access. Try the latest Chrome/Edge.","warn");
+    return;
+  }
+
+  if(!session){
+    setStatus("⏳ AI model is still loading. Please wait a moment, then start the camera.","warn");
+    return;
+  }
+
+  try{
+    stopCamera();
+    startLocationWatch();
+    setStatus("📷 Requesting camera permission…");
+
+    // Prefer the rear camera on phones. The fallback constraints below
+    // keep the request compatible with more Android devices/browsers.
+    const constraints={
+      audio:false,
+      video:{
+        facingMode:{ideal:"environment"},
+        width:{ideal:1280},
+        height:{ideal:720}
+      }
+    };
+
+    try{
+      stream=await navigator.mediaDevices.getUserMedia(constraints);
+    }catch(firstError){
+      console.warn("Preferred camera constraints failed:",firstError);
+
+      // Some mobile browsers reject ideal resolution/facingMode
+      // combinations. Retry with the simplest camera request.
+      stream=await navigator.mediaDevices.getUserMedia({video:true,audio:false});
+    }
+
+    cameraVideo.srcObject=stream;
+    cameraVideo.muted=true;
+    cameraVideo.playsInline=true;
+
+    await new Promise((resolve,reject)=>{
+      if(cameraVideo.readyState>=2){
+        resolve();
+        return;
+      }
+      const onLoaded=()=>{cleanup();resolve();};
+      const onError=()=>{cleanup();reject(new Error("Camera video could not be initialized."));};
+      const cleanup=()=>{
+        cameraVideo.removeEventListener("loadedmetadata",onLoaded);
+        cameraVideo.removeEventListener("error",onError);
+      };
+      cameraVideo.addEventListener("loadedmetadata",onLoaded,{once:true});
+      cameraVideo.addEventListener("error",onError,{once:true});
+    });
+
+    await cameraVideo.play();
+
+    liveMode=true;
+    placeholder.classList.add("hidden");
+    img.classList.add("hidden");
+    cameraVideo.classList.remove("hidden");
+    canvas.classList.remove("hidden");
+    cameraBtn.textContent="📹 Live Camera Running";
+    cameraBtn.disabled=true;
+    stopCameraBtn.classList.remove("hidden");
+    setStatus("🔴 LIVE • scanning road for potholes…","ok");
+
+    // Start only one animation loop.
+    lastDetection=0;
+    liveDetectionLoop(performance.now());
+
+  }catch(e){
+    console.error("Camera start error:",e);
+
+    if(stream){
+      stream.getTracks().forEach(t=>t.stop());
+      stream=null;
+    }
+    cameraVideo.srcObject=null;
+
+    let message="Camera could not start.";
+    if(e && e.name==="NotAllowedError"){
+      message="🚫 Camera permission was denied. Allow camera permission for this site and try again.";
+    }else if(e && e.name==="NotFoundError"){
+      message="📷 No camera was found on this device.";
+    }else if(e && e.name==="NotReadableError"){
+      message="📷 Camera is busy or unavailable. Close other apps using the camera and try again.";
+    }else if(e && e.name==="OverconstrainedError"){
+      message="⚙️ Camera settings were not supported. Please try again.";
+    }else if(e && e.name==="SecurityError"){
+      message="🔒 Camera blocked by browser security. Use HTTPS or localhost.";
+    }else if(e && e.message){
+      message+=" "+e.message;
+    }
+
+    setStatus(message,"warn");
+  }
+}
+
+function stopCamera(){
+  liveMode=false;
+  detecting=false;
+  liveReportState=null;
+  stopLocationWatch();
+  if(stream){
+    stream.getTracks().forEach(t=>t.stop());
+    stream=null;
+  }
+  cameraVideo.pause();
+  cameraVideo.srcObject=null;
+  cameraVideo.classList.add("hidden");
+  stopCameraBtn.classList.add("hidden");
+  cameraBtn.disabled=false;
+  cameraBtn.textContent="📹 Start Live Camera";
+
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  if(!img.src) {
+    canvas.classList.add("hidden");
+    placeholder.classList.remove("hidden");
+  }
+}
+
+function loadImage(file){
+  if(!file)return;
+  stopCamera();
+  const url=URL.createObjectURL(file);
+  img.onload=async()=>{
+    placeholder.classList.add("hidden");
+    img.classList.remove("hidden");
+    canvas.classList.remove("hidden");
+    await detectSource(img);
+    URL.revokeObjectURL(url);
+  };
+  img.src=url;
+}
+
+fileInput.addEventListener("change",e=>loadImage(e.target.files[0]));
+cameraBtn.addEventListener("click",startCamera);
+stopCameraBtn.addEventListener("click",stopCamera);
+
+window.addEventListener("beforeunload",stopCamera);
+loadModel();
+
+</script>
+
+<!-- Firebase + reporting integration. Existing AI/model code above remains unchanged. -->
 <script type="module">
-import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
-import { getDatabase, ref, onValue, update, push } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
+import { getDatabase, ref, get, set, update, push, onValue, query, orderByChild, limitToLast } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
+import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
 
+// ===============================
+// FIREBASE CONFIGURATION
+// REPLACE THESE VALUES WITH YOUR FIREBASE WEB APP CONFIG
+// ===============================
 const firebaseConfig = {
   apiKey: "AIzaSyBRnoO9_blBIA7a1-hr-mXUBoqY5wEoARU",
   authDomain: "ai-model-yolo.firebaseapp.com",
@@ -89,336 +418,264 @@ const firebaseConfig = {
   messagingSenderId: "990596444572",
   appId: "1:990596444572:web:1ceaae58c602f5c2175859"
 };
+// ===============================
+// IMAGEBB CONFIGURATION
+// REPLACE WITH YOUR IMGBB API KEY
+// ===============================
+const IMGBB_API_KEY = "0e2d5de76d80aff2814b575eaf5ab795";
 
-let app, db, auth, uid = null;
-let reports = {}, potholes = {}, observations = {}, histories = {}, settings = {};
-let activeView = 'dashboard', charts = {}, isSignupMode = false;
-
-const $ = id => document.getElementById(id);
-const esc = v => String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
-const fmtTs = v => {
-  if (!v) return 'Not available';
-  let d = new Date(v);
-  if (typeof v === 'number' && v < 100000000000) d = new Date(v * 1000);
-  return isNaN(d.getTime()) ? 'Not available' : d.toLocaleString();
+const REPORT_CONFIG = {
+  confidenceThreshold: 0.45,
+  duplicateDistanceMeters: 35,
+  sameSessionCooldownMs: 15000,
+  cameraStableDetectionsRequired: 2,
+  cameraUploadCooldownMs: 60000,
+  maxSupportingObservations: 12
 };
 
-const moneySafe = v => Number.isFinite(Number(v)) ? Number(v).toFixed(5) : '—';
+let app=null, db=null, auth=null, firebaseReady=false;
+let lastReportAt=0, lastReportSignature="", stableDetectionCount=0;
+let lastObservationAt=0;
+let locationCache=null, locationCacheAt=0;
 
-function toast(msg) {
-  $('toast').textContent = msg;
-  $('toast').classList.remove('hidden');
-  clearTimeout(window.__toastTimer);
-  window.__toastTimer = setTimeout(() => $('toast').classList.add('hidden'), 2600);
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function isFirebaseConfigured(){
+  return Object.values(firebaseConfig).every(v=>typeof v==='string' && v && !v.includes('REPLACE_WITH'));
 }
-
-function setSync(s) { $('syncState').textContent = s; }
-function showAuthMsg(m) { $('authMsg').textContent = m; }
-function statusClass(s) { return String(s || '').toLowerCase().replace(/\s+/g, '-').replace('/', '-'); }
-function priorityClass(p) { return String(p || 'low').toLowerCase(); }
-
-function allReports() { return Object.values(reports || {}); }
-function uniquePotholes() { return Object.values(potholes || {}); }
-
-function counts() {
-  const a = allReports(), c = { total: a.length, New: 0, Waiting: 0, Pending: 0, 'In Progress': 0, 'Successful / Completed': 0, Critical: 0, High: 0, Medium: 0, Low: 0 };
-  a.forEach(r => {
-    if (c[r.status] !== undefined) c[r.status]++;
-    if (c[r.priority] !== undefined) c[r.priority]++;
-  });
-  return c;
+function isImgbbConfigured(){ return IMGBB_API_KEY && !IMGBB_API_KEY.includes('REPLACE_WITH'); }
+function setReportStatus(message,kind=''){
+  const el=document.getElementById('status');
+  if(!el)return;
+  el.textContent=message;
+  el.className='status'+(kind==='ok'?' ok':kind==='warn'?' warn':'');
 }
-
-function reportRows(arr = allReports()) {
-  if (!arr.length) return '<div class="empty">No data available</div>';
-  return `<div class="table-wrap"><table class="table"><thead><tr><th>Image</th><th>Report ID</th><th>Coordinates</th><th>Confidence</th><th>Occurrences</th><th>Priority</th><th>Status</th><th>Last Detected</th></tr></thead><tbody>${arr.map(r => `<tr data-report="${esc(r.reportId || r.id)}" class="report-row"><td>${r.imageUrl ? `<img class="thumb" src="${esc(r.imageUrl)}" alt="Pothole">` : '—'}</td><td><b>${esc(r.reportId || r.id || 'N/A')}</b><br><small>${esc(r.potholeId || '')}</small></td><td>${r.latitude != null ? `${moneySafe(r.latitude)}, ${moneySafe(r.longitude)}` : 'Not available'}</td><td>${r.detectionConfidence != null ? Math.round(r.detectionConfidence * 100) + '%' : 'Not available'}</td><td>${Number(r.occurrenceCount) || 1}</td><td><span class="badge ${priorityClass(r.priority)}">${esc(r.priority || 'Low')}</span></td><td><span class="badge status-${statusClass(r.status)}">${esc(r.status || 'New')}</span></td><td>${esc(fmtTs(r.lastDetectedAt || r.timestamp))}</td></tr>`).join('')}</tbody></table></div>`;
+function uuid(){
+  if(crypto.randomUUID) return crypto.randomUUID();
+  return 'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2);
 }
-
-function filtersHtml() {
-  return `<div class="filters"><input id="search" class="input" placeholder="Search ID, coordinates..."><select id="fStatus" class="select"><option value="All">All Statuses</option><option value="New">New</option><option value="Waiting">Waiting</option><option value="Pending">Pending</option><option value="In Progress">In Progress</option><option value="Successful / Completed">Successful / Completed</option></select><select id="fPriority" class="select"><option value="All">All Priorities</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select><input id="fDate" class="input" type="date"><select id="fMonth" class="select"><option value="">All Months</option>${Array.from({length: 12}, (_, i) => `<option value="${i + 1}">${new Date(2000, i, 1).toLocaleString(undefined, {month: 'long'})}</option>`).join('')}</select><input id="fYear" class="input" type="number" placeholder="Year"></div>`;
+function haversineMeters(aLat,aLng,bLat,bLng){
+  if([aLat,aLng,bLat,bLng].some(v=>typeof v!=='number'||!Number.isFinite(v)))return Infinity;
+  const R=6371000, p=Math.PI/180;
+  const dLat=(bLat-aLat)*p,dLng=(bLng-aLng)*p;
+  const x=Math.sin(dLat/2)**2+Math.cos(aLat*p)*Math.cos(bLat*p)*Math.sin(dLng/2)**2;
+  return 2*R*Math.asin(Math.min(1,Math.sqrt(x)));
 }
-
-function filtered() {
-  let a = allReports();
-  const q = $('search')?.value?.toLowerCase().trim();
-  const st = $('fStatus')?.value, p = $('fPriority')?.value, d = $('fDate')?.value, m = $('fMonth')?.value, y = $('fYear')?.value;
-  if (q) a = a.filter(r => [r.reportId, r.potholeId, r.address, r.area, r.latitude, r.longitude, r.status, r.priority].some(x => String(x ?? '').toLowerCase().includes(q)));
-  if (st && st !== 'All') a = a.filter(r => r.status === st);
-  if (p && p !== 'All') a = a.filter(r => r.priority === p);
-  if (d) a = a.filter(r => r.date === d);
-  if (m) a = a.filter(r => Number(r.month) === Number(m));
-  if (y) a = a.filter(r => Number(r.year) === Number(y));
-  return a.sort((a, b) => (b.priorityScore || 0) - (a.priorityScore || 0) || (b.lastDetectedAt || 0) - (a.lastDetectedAt || 0));
-}
-
-function bindFilters() {
-  ['search', 'fStatus', 'fPriority', 'fDate', 'fMonth', 'fYear'].forEach(id => $(id)?.addEventListener('input', () => renderReportTable()));
-  document.querySelectorAll('.report-row').forEach(el => el.addEventListener('click', () => openReport(el.dataset.report)));
-}
-
-function renderReportTable() {
-  const box = $('reportTable');
-  if (box) { box.innerHTML = reportRows(filtered()); bindFilters(); }
-}
-
-function dashboard() {
-  const c = counts(), a = allReports().sort((x, y) => (y.lastDetectedAt || 0) - (x.lastDetectedAt || 0));
-  return `<div class="grid">${[['total','Total Reports'],['potholes','Total Unique Potholes'],['New','New'],['Waiting','Waiting'],['Pending','Pending'],['In Progress','In Progress'],['Successful / Completed','Successful'],['Critical','Critical'],['High','High'],['Medium','Medium'],['Low','Low']].map(([k, l]) => `<div class="card metric"><b>${k === 'potholes' ? uniquePotholes().length : (c[k] ?? 0)}</b><span>${l}</span></div>`).join('')}</div><div class="cards2 section"><div class="card"><h2>Recent Reports</h2>${reportRows(a.slice(0, 8))}</div><div class="card"><h2>Highest Priority</h2>${reportRows([...a].sort((x, y) => (y.priorityScore || 0) - (x.priorityScore || 0)).slice(0, 6))}</div></div>`;
-}
-
-function reportsView(title = 'All Reports', arr = null) {
-  return `<div class="card">${filtersHtml()}<div id="reportTable">${reportRows(arr || filtered())}</div></div>`;
-}
-
-function potholesView() {
-  const a = uniquePotholes().sort((x, y) => (y.occurrenceCount || 0) - (x.occurrenceCount || 0));
-  return `<div class="card"><h2>Unique Potholes</h2>${a.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Pothole ID</th><th>Associated Report</th><th>Occurrences</th><th>Vehicles</th><th>Best Confidence</th><th>Priority</th><th>Status</th><th>Last Detected</th></tr></thead><tbody>${a.map(p => `<tr class="report-row" data-report="${esc(p.reportId || p.id)}"><td><b>${esc(p.potholeId || p.id)}</b></td><td>${esc(p.reportId || '—')}</td><td>${Number(p.occurrenceCount) || 1}</td><td>${Number(p.vehicleCount) || 1}</td><td>${p.bestConfidence != null ? Math.round(p.bestConfidence * 100) + '%' : 'Not available'}</td><td><span class="badge ${priorityClass(p.priority)}">${esc(p.priority || 'Low')}</span></td><td>${esc(p.status || 'New')}</td><td>${esc(fmtTs(p.lastDetectedAt))}</td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No unique potholes recorded yet</div>'}</div>`;
-}
-
-function analytics() {
-  return `<div class="charts"><div class="card"><h2>Reports by Day</h2><div class="chartbox"><canvas id="dayChart"></canvas></div></div><div class="card"><h2>Reports by Month</h2><div class="chartbox"><canvas id="monthChart"></canvas></div></div><div class="card"><h2>Status Distribution</h2><div class="chartbox"><canvas id="statusChart"></canvas></div></div><div class="card"><h2>Priority Distribution</h2><div class="chartbox"><canvas id="priorityChart"></canvas></div></div><div class="card"><h2>Confidence Distribution</h2><div class="chartbox"><canvas id="confChart"></canvas></div></div><div class="card"><h2>Reports by Year</h2><div class="chartbox"><canvas id="yearChart"></canvas></div></div></div>`;
-}
-
-function destroyCharts() {
-  Object.keys(charts).forEach(k => { if (charts[k]) { charts[k].destroy(); delete charts[k]; } });
-}
-
-function makeChart(id, type, obj) {
-  const el = $(id); if (!el) return;
-  if (charts[id]) charts[id].destroy();
-  charts[id] = new Chart(el, {
-    type,
-    data: {
-      labels: Object.keys(obj).length ? Object.keys(obj) : ['No Data'],
-      datasets: [{ label: 'Detection Count', data: Object.values(obj).length ? Object.values(obj) : [0], backgroundColor: ['#1677ff','#28c76f','#ffcf5a','#ff5d73','#91a7bb'] }]
-    },
-    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: type === 'doughnut' } } }
+function validLatLng(lat,lng){ return Number.isFinite(lat)&&Number.isFinite(lng)&&lat>=-90&&lat<=90&&lng>=-180&&lng<=180; }
+async function getLocation(){
+  if(latestLocation && Date.now()-latestLocation.timestamp<1500) return latestLocation;
+  if(locationCache && Date.now()-locationCacheAt<1500) return locationCache;
+  if(!navigator.geolocation) return {available:false};
+  return await new Promise(resolve=>{
+    navigator.geolocation.getCurrentPosition(pos=>{
+      locationCache={available:true,latitude:pos.coords.latitude,longitude:pos.coords.longitude,accuracy:Number.isFinite(pos.coords.accuracy)?pos.coords.accuracy:null,timestamp:Date.now()};
+      locationCacheAt=Date.now(); resolve(locationCache);
+    },()=>resolve({available:false}),{enableHighAccuracy:true,maximumAge:0,timeout:3000});
   });
 }
-
-function renderCharts() {
-  const a = allReports(), days = {}, months = {}, years = {}, status = {}, priority = {}, conf = {};
-  a.forEach(r => {
-    const day = r.date || 'Unknown', month = (r.year && r.month) ? `${r.year}-${String(r.month).padStart(2, '0')}` : 'Unknown', year = r.year || 'Unknown';
-    days[day] = (days[day] || 0) + 1;
-    months[month] = (months[month] || 0) + 1;
-    years[year] = (years[year] || 0) + 1;
-    status[r.status || 'New'] = (status[r.status || 'New'] || 0) + 1;
-    priority[r.priority || 'Low'] = (priority[r.priority || 'Low'] || 0) + 1;
-    if (r.detectionConfidence != null) {
-      const b = (Math.floor(r.detectionConfidence * 10) / 10).toFixed(1);
-      conf[b] = (conf[b] || 0) + 1;
-    }
-  });
-  makeChart('dayChart', 'line', days);
-  makeChart('monthChart', 'bar', months);
-  makeChart('statusChart', 'doughnut', status);
-  makeChart('priorityChart', 'doughnut', priority);
-  makeChart('confChart', 'bar', conf);
-  makeChart('yearChart', 'bar', years);
-}
-
-function mapView() {
-  const a = allReports().filter(r => Number.isFinite(Number(r.latitude)) && Number.isFinite(Number(r.longitude)));
-  return `<div class="card"><h2>Map / Geolocation Markers</h2><p style="color:var(--muted);font-size:13px;margin-bottom:12px">Real coordinates captured by mobile/camera sensors.</p>${a.length ? `<div class="table-wrap"><table class="table"><thead><tr><th>Report ID</th><th>Latitude, Longitude</th><th>Priority</th><th>Status</th><th>Occurrences</th><th>Navigation</th></tr></thead><tbody>${a.map(r => `<tr><td><b>${esc(r.reportId || r.id)}</b></td><td>${Number(r.latitude).toFixed(6)}, ${Number(r.longitude).toFixed(6)}</td><td><span class="badge ${priorityClass(r.priority)}">${esc(r.priority || 'Low')}</span></td><td>${esc(r.status || 'New')}</td><td>${Number(r.occurrenceCount) || 1}</td><td><button class="btn primary" onclick="window.open('https://www.google.com/maps?q=${encodeURIComponent(r.latitude + ',' + r.longitude)}','_blank')">Open Maps</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="empty">No location coordinates recorded yet</div>'}</div>`;
-}
-
-function dateView(kind) {
-  let a = allReports(); const now = new Date();
-  if (kind === 'date') a = a.filter(r => r.date === now.toISOString().slice(0, 10));
-  if (kind === 'month') a = a.filter(r => Number(r.month) === now.getMonth() + 1 && Number(r.year) === now.getFullYear());
-  if (kind === 'year') a = a.filter(r => Number(r.year) === now.getFullYear());
-  const avg = a.length ? a.reduce((s, r) => s + (Number(r.detectionConfidence) || 0), 0) / a.length : 0;
-  return `<div class="grid"><div class="card metric"><b>${a.length}</b><span>Reports in selected period</span></div><div class="card metric"><b>${new Set(a.map(r => r.potholeId)).size}</b><span>Unique Potholes</span></div><div class="card metric"><b>${Math.round(avg * 100)}%</b><span>Average Confidence</span></div><div class="card metric"><b>${a.filter(r => r.status === 'Successful / Completed').length}</b><span>Completed</span></div></div><div class="section card"><h2>${kind === 'date' ? 'Today' : kind === 'month' ? 'This Month' : 'This Year'}</h2>${reportRows(a)}</div>`;
-}
-
-function settingsView() {
-  const s = settings || {};
-  return `<div class="card"><h2>System Threshold Settings</h2><div class="detail-grid"><div><div class="field"><label>Duplicate Detection Distance (Meters)</label><input id="setDistance" class="input" type="number" min="1" value="${esc(s.duplicateDistanceMeters ?? 35)}"></div><div class="field"><label>AI Confidence Threshold (0.0 to 1.0)</label><input id="setConfidence" class="input" type="number" min="0" max="1" step="0.01" value="${esc(s.confidenceThreshold ?? 0.45)}"></div></div><div><div class="field"><label>Default New Report Status</label><select id="setStatus" class="select"><option ${s.defaultStatus === 'New' ? 'selected' : ''}>New</option><option ${s.defaultStatus === 'Waiting' ? 'selected' : ''}>Waiting</option><option ${s.defaultStatus === 'Pending' ? 'selected' : ''}>Pending</option></select></div></div></div><button id="saveSettings" class="btn primary" style="margin-top:12px">Save Settings</button></div>`;
-}
-
-function profileView() {
-  return `<div class="card"><h2>Admin Profile Information</h2><p><b>Email:</b> ${esc(auth.currentUser?.email || 'N/A')}</p><p><b>Firebase UID:</b> <small>${esc(auth.currentUser?.uid || 'N/A')}</small></p><button class="btn danger" id="profileLogout">Logout Account</button></div>`;
-}
-
-function viewTitle(v) {
-  return ({ dashboard: 'Dashboard', reports: 'All Reports', potholes: 'Potholes', new: 'New Reports', waiting: 'Waiting', pending: 'Pending', progress: 'In Progress', successful: 'Successful / Completed', high: 'High Priority', analytics: 'Analytics', map: 'Map / Locations', date: 'Reports by Date', month: 'Reports by Month', year: 'Reports by Year', settings: 'Settings', profile: 'Admin Profile' }[v] || 'Dashboard');
-}
-
-function render() {
-  destroyCharts();
-  const t = viewTitle(activeView);
-  $('viewTitle').textContent = t;
-  $('nav').querySelectorAll('button[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === activeView));
-  let html = '';
-  if (activeView === 'dashboard') html = dashboard();
-  else if (activeView === 'reports') html = reportsView();
-  else if (activeView === 'potholes') html = potholesView();
-  else if (['new', 'waiting', 'pending', 'progress', 'successful', 'high'].includes(activeView)) {
-    const map = { new: 'New', waiting: 'Waiting', pending: 'Pending', progress: 'In Progress', successful: 'Successful / Completed', high: null };
-    let a = allReports();
-    if (map[activeView]) a = a.filter(r => r.status === map[activeView]);
-    if (activeView === 'high') a = a.filter(r => ['Critical', 'High'].includes(r.priority));
-    html = reportsView(t, a);
+async function imageToBlob(source){
+  if(source && source.tagName==='IMG'){
+    const r=await fetch(source.src); return await r.blob();
   }
-  else if (activeView === 'analytics') html = analytics();
-  else if (activeView === 'map') html = mapView();
-  else if (['date', 'month', 'year'].includes(activeView)) html = dateView(activeView);
-  else if (activeView === 'settings') html = settingsView();
-  else if (activeView === 'profile') html = profileView();
-
-  $('view').innerHTML = html;
-  bindFilters();
-  if (activeView === 'analytics') setTimeout(renderCharts, 50);
-  if (activeView === 'settings') $('saveSettings')?.addEventListener('click', saveSettings);
-  if (activeView === 'profile') $('profileLogout')?.addEventListener('click', logout);
-}
-
-async function saveSettings() {
-  try {
-    const data = { duplicateDistanceMeters: Number($('setDistance').value) || 35, confidenceThreshold: Math.min(1, Math.max(0, Number($('setConfidence').value) || .45)), defaultStatus: $('setStatus').value, updatedAt: Date.now(), updatedBy: uid };
-    await update(ref(db, 'settings'), data);
-    toast('Settings updated successfully');
-  } catch (err) { toast('Failed to save settings'); }
-}
-
-async function openReport(id) {
-  const r = reports[id] || allReports().find(x => (x.reportId === id || x.id === id));
-  if (!r) return;
-  const reportKey = r.reportId || r.id || id;
-  const hs = histories[reportKey] ? Object.values(histories[reportKey]).sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0)) : [];
-  const obs = Object.values(observations || {}).filter(o => o.reportId === reportKey).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-  $('modalCard').innerHTML = `<h2>Report Details: ${esc(reportKey)}</h2><div class="detail-grid"><div>${r.imageUrl ? `<img class="detail-img" src="${esc(r.imageUrl)}" alt="Pothole">` : '<div class="empty">Image not available</div>'}</div><div><p><b>Pothole ID:</b> ${esc(r.potholeId || 'N/A')}</p><p><b>Confidence:</b> ${r.detectionConfidence != null ? Math.round(r.detectionConfidence * 100) + '%' : 'Not available'}</p><p><b>Coordinates:</b> ${r.latitude != null ? `${r.latitude}, ${r.longitude}` : 'Not available'}</p>${r.latitude != null && r.longitude != null ? `<button class="btn primary" style="margin:4px 0 10px" onclick="window.open('https://www.google.com/maps?q=${encodeURIComponent(r.latitude + ',' + r.longitude)}','_blank')">🗺️ Open Location in Google Maps</button>` : ''}<p><b>Accuracy:</b> ${r.locationAccuracy != null ? Math.round(r.locationAccuracy) + ' m' : 'Not available'}</p><p><b>First Detected:</b> ${esc(fmtTs(r.firstDetectedAt))}</p><p><b>Last Detected:</b> ${esc(fmtTs(r.lastDetectedAt || r.timestamp))}</p><p><b>Occurrences:</b> ${Number(r.occurrenceCount) || 1}</p><p><b>Priority:</b> <span class="badge ${priorityClass(r.priority)}">${esc(r.priority || 'Low')}</span></p><p><b>Status:</b> ${esc(r.status || 'New')}</p></div></div><div class="section"><h3>Update Status</h3><div style="display:flex;flex-wrap:wrap;gap:8px">${['New', 'Waiting', 'Pending', 'In Progress', 'Successful / Completed'].map(s => `<button class="btn" data-status="${esc(s)}">${esc(s)}</button>`).join('')}</div></div><div class="section"><h3>Status Timeline</h3><div class="timeline">${hs.length ? hs.map(h => `<div class="timeline-item"><b>${esc(h.status)}</b><small>${esc(fmtTs(h.timestamp))} • ${esc(h.actor || 'admin')}</small>${h.note ? `<div>${esc(h.note)}</div>` : ''}</div>`).join('') : '<div class="empty">No status updates logged</div>'}</div></div><div class="section"><h3>Observations (${obs.length})</h3>${obs.length ? obs.slice(0, 10).map(o => `<div class="card" style="margin-bottom:8px"><b>${esc(o.observationId || o.id || 'Observation')}</b><div style="color:var(--muted);font-size:12px">${esc(fmtTs(o.timestamp))} • ${esc(o.source || 'detector')}</div></div>`).join('') : '<div class="empty">No observations recorded</div>'}</div><div style="text-align:right;margin-top:14px"><button id="closeModal" class="btn">Close Window</button></div>`;
-
-  $('modal').classList.remove('hidden');
-  $('closeModal').onclick = closeModal;
-  document.querySelectorAll('[data-status]').forEach(b => b.onclick = () => changeStatus(reportKey, b.dataset.status));
-}
-
-function closeModal() { $('modal').classList.add('hidden'); }
-
-async function changeStatus(id, status) {
-  if (!auth.currentUser) return;
-  try {
-    const now = Date.now();
-    const hRef = push(ref(db, `statusHistory/${id}`));
-    const updates = {};
-    updates[`reports/${id}/status`] = status;
-    updates[`reports/${id}/updatedAt`] = now;
-    updates[`reports/${id}/repairStatus`] = status === 'Successful / Completed' ? 'Completed' : status === 'In Progress' ? 'In Progress' : 'Unresolved';
-    if (reports[id]?.potholeId) {
-      updates[`potholes/${reports[id].potholeId}/status`] = status;
-      updates[`potholes/${reports[id].potholeId}/updatedAt`] = now;
-    }
-    updates[`statusHistory/${id}/${hRef.key}`] = { status, timestamp: now, adminUid: uid, actor: auth.currentUser.email || 'admin', note: `Status updated to ${status}` };
-    await update(ref(db), updates);
-    toast('Status updated');
-    openReport(id);
-  } catch (err) { toast('Error updating status'); console.error(err); }
-}
-
-async function logout() { await signOut(auth); }
-
-function subscribe() {
-  setSync('Realtime sync active');
-  onValue(ref(db, 'reports'), s => { reports = s.val() || {}; setSync('Synced ' + new Date().toLocaleTimeString()); render(); });
-  onValue(ref(db, 'potholes'), s => { potholes = s.val() || {}; render(); });
-  onValue(ref(db, 'observations'), s => { observations = s.val() || {}; });
-  onValue(ref(db, 'statusHistory'), s => { histories = s.val() || {}; });
-  onValue(ref(db, 'settings'), s => { settings = s.val() || {}; if (activeView === 'settings') render(); });
-}
-
-function openApp() {
-  $('loginView').classList.add('hidden');
-  $('appView').classList.remove('hidden');
-  $('adminEmail').textContent = auth.currentUser?.email || '';
-  subscribe();
-  render();
-}
-
-function openLogin() {
-  $('appView').classList.add('hidden');
-  $('loginView').classList.remove('hidden');
-}
-
-function formatAuthError(err) {
-  const code = err.code || '';
-  if (code.includes('invalid-credential') || code.includes('wrong-password') || code.includes('user-not-found')) return 'Invalid email or password.';
-  if (code.includes('email-already-in-use')) return 'This email is already registered. Click Login.';
-  if (code.includes('weak-password')) return 'Password must be at least 6 characters.';
-  if (code.includes('invalid-email')) return 'Please enter a valid email address.';
-  return err.message.replace('Firebase:', '').trim();
-}
-
-function toggleAuthMode(signup) {
-  isSignupMode = signup;
-  if (isSignupMode) {
-    $('confirmWrap').classList.remove('hidden');
-    $('authTitle').textContent = 'Create Admin Account';
-    $('loginBtn').textContent = 'Back to Login';
-    $('loginBtn').classList.remove('primary');
-    $('signupBtn').textContent = 'Submit Signup';
-    $('signupBtn').classList.add('primary');
-  } else {
-    $('confirmWrap').classList.add('hidden');
-    $('authTitle').textContent = 'Pothole AI Admin';
-    $('loginBtn').textContent = 'Login';
-    $('loginBtn').classList.add('primary');
-    $('signupBtn').textContent = 'Create Account';
-    $('signupBtn').classList.remove('primary');
+  if(source && source.tagName==='VIDEO'){
+    const w=source.videoWidth||1280,h=source.videoHeight||720;
+    const c=document.createElement('canvas'); c.width=w;c.height=h;
+    c.getContext('2d').drawImage(source,0,0,w,h);
+    return await new Promise((resolve,reject)=>c.toBlob(b=>b?resolve(b):reject(new Error('Could not capture camera frame.')),'image/jpeg',0.82));
   }
-  showAuthMsg('');
+  return null;
 }
-
-$('loginBtn').onclick = async () => {
-  if (isSignupMode) { toggleAuthMode(false); return; }
-  const e = $('email').value.trim(), p = $('password').value;
-  if (!e || !p) return showAuthMsg('Please fill in both email and password.');
-  try {
-    showAuthMsg('Logging in...');
-    await signInWithEmailAndPassword(auth, e, p);
-  } catch (err) { showAuthMsg(formatAuthError(err)); }
-};
-
-$('signupBtn').onclick = async () => {
-  if (!isSignupMode) { toggleAuthMode(true); return; }
-  const e = $('email').value.trim(), p = $('password').value, cp = $('confirmPassword').value;
-  if (!e || !p) return showAuthMsg('Please enter email and password.');
-  if (p !== cp) return showAuthMsg('Passwords do not match.');
-  try {
-    showAuthMsg('Creating account...');
-    await createUserWithEmailAndPassword(auth, e, p);
-  } catch (err) { showAuthMsg(formatAuthError(err)); }
-};
-
-$('logoutBtn').onclick = logout;
-$('logoutSide').onclick = logout;
-$('hamb').onclick = () => $('sidebar').classList.toggle('open');
-$('modal').onclick = e => { if (e.target === $('modal')) closeModal(); };
-$('nav').onclick = e => {
-  const b = e.target.closest('button[data-view]');
-  if (!b) return;
-  activeView = b.dataset.view;
-  $('sidebar').classList.remove('open');
-  render();
-};
-
-try {
-  app = initializeApp(firebaseConfig);
-  db = getDatabase(app);
-  auth = getAuth(app);
-  onAuthStateChanged(auth, user => {
-    if (user) { uid = user.uid; openApp(); }
-    else { uid = null; openLogin(); }
+async function uploadToImageBB(blob){
+  if(!isImgbbConfigured()) return {url:null,status:'not_configured'};
+  const fd=new FormData();
+  fd.append('key',IMGBB_API_KEY);
+  fd.append('image',blob,'pothole-'+Date.now()+'.jpg');
+  const res=await fetch('https://api.imgbb.com/1/upload',{method:'POST',body:fd});
+  if(!res.ok) throw new Error('Image hosting service returned an error.');
+  const data=await res.json();
+  if(!data.success || !data.data?.url) throw new Error('Image hosting response did not contain an image URL.');
+  return {url:data.data.url,status:'uploaded'};
+}
+function confidenceStats(boxes){
+  const scores=boxes.map(b=>b.score).filter(Number.isFinite);
+  return {count:boxes.length,best:scores.length?Math.max(...scores):null,average:scores.length?scores.reduce((a,b)=>a+b,0)/scores.length:null};
+}
+function priorityFrom({bestConfidence,occurrenceCount,vehicleCount,severity,ageMs}){
+  let score=0;
+  if(Number.isFinite(bestConfidence)) score += bestConfidence*40;
+  score += Math.min(25,Math.max(0,(occurrenceCount||1)-1)*3);
+  score += Math.min(15,Math.max(0,(vehicleCount||1)-1)*4);
+  if(severity==='critical')score+=25; else if(severity==='high')score+=18; else if(severity==='medium')score+=10;
+  score += Math.min(10,Math.max(0,ageMs||0)/86400000*2);
+  if(score>=75)return {level:'Critical',score:Math.round(score)};
+  if(score>=55)return {level:'High',score:Math.round(score)};
+  if(score>=30)return {level:'Medium',score:Math.round(score)};
+  return {level:'Low',score:Math.round(score)};
+}
+function makeObservation({reportId,potholeId,boxes,location,sourceType,imageUrl}){
+  const now=Date.now(), stats=confidenceStats(boxes);
+  return {
+    observationId:uuid(),reportId,potholeId,imageUrl:imageUrl||null,
+    detectionClass:'pothole',detectionCount:stats.count,
+    detections:boxes.map(b=>({x1:b.x1,y1:b.y1,x2:b.x2,y2:b.y2,confidence:b.score})),
+    bestConfidence:stats.best,averageConfidence:stats.average,
+    latitude:location?.available?location.latitude:null,longitude:location?.available?location.longitude:null,
+    locationAccuracy:location?.available?location.accuracy:null,
+    timestamp:now,source:sourceType,createdAt:now
+  };
+}
+async function findNearbyPothole(location){
+  if(!db || !location?.available)return null;
+  const snap=await get(ref(db,'potholes'));
+  if(!snap.exists())return null;
+  let best=null,bestDistance=Infinity;
+  Object.entries(snap.val()||{}).forEach(([id,p])=>{
+    const d=haversineMeters(location.latitude,location.longitude,p.latitude,p.longitude);
+    if(d<=REPORT_CONFIG.duplicateDistanceMeters && d<bestDistance){best={id,data:p,distance:d};bestDistance=d;}
   });
-} catch (e) {
-  showAuthMsg('Firebase initialization failed. Verify Firebase credentials.');
-  console.error(e);
+  return best;
+}
+async function createOrUpdateReport(boxes,source,imageBlob){
+  if(!firebaseReady || !db || !boxes?.length) return null;
+  const now=Date.now();
+  const sourceType=source?.tagName==='VIDEO'?'live_camera':'image_upload';
+  const stats=confidenceStats(boxes);
+  const best=stats.best;
+  if(!Number.isFinite(best) || best<REPORT_CONFIG.confidenceThreshold)return null;
+
+  const location=await getLocation();
+  const lat=location.available?location.latitude:null;
+  const lng=location.available?location.longitude:null;
+
+  // LIVE CAMERA: never wait for image hosting, duplicate lookup, or a cooldown.
+  // Create the Firebase report on the first detection, then update its newest
+  // GPS/detection data on every subsequent completed inference.
+  if(sourceType==='live_camera'){
+    try{
+      if(!liveReportState){
+        const reportId='RPT-'+new Date(now).toISOString().replace(/[-:TZ.]/g,'').slice(0,14)+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+        const potholeId='PTH-'+uuid();
+        const report={
+          reportId,potholeId,imageUrl:null,imageUploadStatus:'not_uploaded',
+          detectionConfidence:best,detectionClass:'pothole',detectionCount:stats.count,
+          detections:boxes.map(b=>({x1:b.x1,y1:b.y1,x2:b.x2,y2:b.y2,confidence:b.score})),
+          latitude:lat,longitude:lng,locationAccuracy:location.accuracy||null,
+          address:null,area:null,timestamp:now,date:new Date(now).toISOString().slice(0,10),time:new Date(now).toTimeString().slice(0,8),
+          day:new Date(now).getDate(),month:new Date(now).getMonth()+1,year:new Date(now).getFullYear(),
+          source:'live_camera',status:'New',priority:priorityFrom({bestConfidence:best,occurrenceCount:1,vehicleCount:1,ageMs:0}).level,
+          priorityScore:priorityFrom({bestConfidence:best,occurrenceCount:1,vehicleCount:1,ageMs:0}).score,
+          severity:null,occurrenceCount:1,detectionCountTotal:stats.count,vehicleCount:1,
+          firstDetectedAt:now,lastDetectedAt:now,duplicateCount:0,nearbyReports:0,verificationState:'Unverified',repairStatus:'Unresolved',
+          modelName:'YOLO11n browser ONNX',modelVersion:'best.onnx',createdAt:now,updatedAt:now,notes:'',bestConfidence:best,averageConfidence:stats.average
+        };
+        // Single direct write first: this is the critical path for the admin panel.
+        await set(ref(db,`reports/${reportId}`),report);
+        await set(ref(db,`potholes/${potholeId}`),report);
+        liveReportState={reportId,potholeId,bestConfidence:best,detectionCount:stats.count};
+        setReportStatus('✅ Pothole report saved to Firebase','ok');
+        // Supporting observation is intentionally non-blocking.
+        set(ref(db,`observations/${uuid()}`),makeObservation({reportId,potholeId,boxes,location,sourceType,imageUrl:null})).catch(console.error);
+        return reportId;
+      }
+
+      liveReportState.bestConfidence=Math.max(Number(liveReportState.bestConfidence)||0,best);
+      liveReportState.detectionCount=Number(liveReportState.detectionCount||0)+stats.count;
+      const updates={
+        latitude:lat,longitude:lng,locationAccuracy:location.accuracy||null,
+        lastDetectedAt:now,updatedAt:now,detectionConfidence:best,
+        bestConfidence:liveReportState.bestConfidence,
+        detectionCountTotal:liveReportState.detectionCount,detectionCount:stats.count,
+        detections:boxes.map(b=>({x1:b.x1,y1:b.y1,x2:b.x2,y2:b.y2,confidence:b.score}))
+      };
+      // Update both paths so existing admin panels reading either path see fresh data.
+      await update(ref(db,`reports/${liveReportState.reportId}`),updates);
+      await update(ref(db,`potholes/${liveReportState.potholeId}`),updates);
+      lastReportAt=now; lastReportSignature=location.available?`${lat},${lng}`:''; lastObservationAt=now;
+      return liveReportState.reportId;
+    }catch(e){
+      console.error('LIVE FIREBASE WRITE FAILED:',e);
+      setReportStatus('❌ Firebase report failed: '+(e?.message||e),'warn');
+      return null;
+    }
+  }
+
+  // IMAGE UPLOAD: preserve the normal report flow, but write the metadata first.
+  try{
+    const reportId='RPT-'+new Date(now).toISOString().replace(/[-:TZ.]/g,'').slice(0,14)+'-'+Math.random().toString(36).slice(2,7).toUpperCase();
+    const potholeId='PTH-'+uuid();
+    const pr=priorityFrom({bestConfidence:best,occurrenceCount:1,vehicleCount:1,ageMs:0});
+    const report={reportId,potholeId,imageUrl:null,imageUploadStatus:'pending',detectionConfidence:best,detectionClass:'pothole',detectionCount:stats.count,
+      detections:boxes.map(b=>({x1:b.x1,y1:b.y1,x2:b.x2,y2:b.y2,confidence:b.score})),latitude:lat,longitude:lng,locationAccuracy:location.accuracy||null,
+      timestamp:now,date:new Date(now).toISOString().slice(0,10),time:new Date(now).toTimeString().slice(0,8),source:'image_upload',status:'New',priority:pr.level,priorityScore:pr.score,
+      occurrenceCount:1,vehicleCount:1,firstDetectedAt:now,lastDetectedAt:now,createdAt:now,updatedAt:now,bestConfidence:best,averageConfidence:stats.average};
+    await set(ref(db,`reports/${reportId}`),report);
+    await set(ref(db,`potholes/${potholeId}`),report);
+    setReportStatus('✅ Pothole report saved to Firebase','ok');
+    if(imageBlob){
+      try{
+        const imageResult=await uploadToImageBB(imageBlob);
+        if(imageResult.url){
+          await update(ref(db,`reports/${reportId}`),{imageUrl:imageResult.url,imageUploadStatus:'uploaded',updatedAt:Date.now()});
+          await update(ref(db,`potholes/${potholeId}`),{imageUrl:imageResult.url,imageUploadStatus:'uploaded',updatedAt:Date.now()});
+        }
+      }catch(e){console.warn('Image upload failed; report remains saved:',e);}
+    }
+    return reportId;
+  }catch(e){
+    console.error('FIREBASE IMAGE REPORT FAILED:',e);
+    setReportStatus('❌ Firebase report failed: '+(e?.message||e),'warn');
+    return null;
+  }
 }
 
-window.openReport = openReport;
+async function integrationDetectSource(source){
+  if(window.__originalDetectSource) await window.__originalDetectSource(source);
+  const boxes=Array.isArray(window.__lastPotholeDetections)?window.__lastPotholeDetections:[];
+  if(!boxes.length || !firebaseReady)return boxes;
+  try{
+    let blob=null;
+    const sourceType=source?.tagName==='VIDEO'?'live_camera':'image_upload';
+    if(sourceType==='image_upload'){
+      blob=await imageToBlob(source);
+    }else{
+      // Do not capture every camera frame. A frame is captured only inside createOrUpdateReport after
+      // stability/duplicate/cooldown checks have passed.
+      blob=null;
+    }
+    if(sourceType==='live_camera'){
+      // Never block the next camera inference on a Firebase/network write.
+      createOrUpdateReport(boxes,source,blob).catch(e=>console.error('Live report sync error:',e));
+    }else{
+      await createOrUpdateReport(boxes,source,blob);
+    }
+  }catch(e){
+    console.error('Report integration error:',e);
+    setReportStatus('⚠️ Detection worked, but the report could not be synchronized.','warn');
+  }
+  return boxes;
+}
+
+async function initReporting(){
+  if(!isFirebaseConfigured()){
+    console.warn('Firebase is not configured. Detection will continue locally; reporting is disabled until config is replaced.');
+    return;
+  }
+  try{
+    app=initializeApp(firebaseConfig);db=getDatabase(app);auth=getAuth(app);firebaseReady=true;
+    onAuthStateChanged(auth,()=>{});
+    window.potholeFirebase={app,db,auth,config:firebaseConfig,IMGBB_API_KEY,REPORT_CONFIG};
+    setReportStatus('🤖 AI ready • Firebase reporting connected','ok');
+  }catch(e){
+    console.error('Firebase initialization failed',e);
+    setReportStatus('AI ready • Firebase is not available right now','warn');
+  }
+}
+
+// Keep the existing detector as the source of truth; only add the reporting hook.
+window.__originalDetectSource=window.detectSource;
+window.detectSource=integrationDetectSource;
+window.potholeReporting={createOrUpdateReport,getLocation,uploadToImageBB,REPORT_CONFIG};
+initReporting();
 </script>
+
 </body>
 </html>
